@@ -1,0 +1,63 @@
+// frontend/lib/api.ts
+import { API_URL } from "./config";
+
+export async function startSearch(query: string, maxResults = 10): Promise<{ search_id: string }> {
+  const res = await fetch(`${API_URL}/api/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, max_results: maxResults }),
+  });
+  if (!res.ok) throw new Error("Failed to start search");
+  return res.json();
+}
+
+export async function confirmProducts(searchId: string, productIds: string[]): Promise<void> {
+  const res = await fetch(`${API_URL}/api/search/${searchId}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ product_ids: productIds }),
+  });
+  if (!res.ok) throw new Error("Failed to confirm products");
+}
+
+export async function getResults(searchId: string) {
+  const res = await fetch(`${API_URL}/api/search/${searchId}/results`);
+  if (!res.ok) throw new Error("Failed to fetch results");
+  return res.json();
+}
+
+export async function getSearchHistory() {
+  const res = await fetch(`${API_URL}/api/searches`);
+  if (!res.ok) throw new Error("Failed to fetch search history");
+  return res.json();
+}
+
+export async function deleteSearch(searchId: string): Promise<void> {
+  await fetch(`${API_URL}/api/searches/${searchId}`, { method: "DELETE" });
+}
+
+export async function getWatchlist() {
+  const res = await fetch(`${API_URL}/api/watchlist`);
+  if (!res.ok) throw new Error("Failed to fetch watchlist");
+  return res.json();
+}
+
+export async function addToWatchlist(productId: string) {
+  const res = await fetch(`${API_URL}/api/watchlist`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ product_id: productId }),
+  });
+  if (!res.ok) throw new Error("Failed to add to watchlist");
+  return res.json();
+}
+
+export async function removeFromWatchlist(watchlistId: string): Promise<void> {
+  await fetch(`${API_URL}/api/watchlist/${watchlistId}`, { method: "DELETE" });
+}
+
+export async function refreshWatchlistItem(watchlistId: string) {
+  const res = await fetch(`${API_URL}/api/watchlist/${watchlistId}/refresh`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to refresh price");
+  return res.json();
+}
