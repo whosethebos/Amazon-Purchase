@@ -1,6 +1,8 @@
 # backend/main.py
 import asyncio
 import json
+import re
+import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -101,6 +103,38 @@ async def get_results(search_id: str):
 
     result.sort(key=lambda x: (x.get("analysis") or {}).get("rank") or 99)
     return {"search": search, "products": result}
+
+
+@app.get("/api/preview-images")
+async def get_preview_images(q: str):
+    """Fetch up to 4 web image URLs for a query via DuckDuckGo (best-effort)."""
+    try:
+        hdrs = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+        async with httpx.AsyncClient(timeout=5.0, headers=hdrs) as client:
+            # Step 1: get vqd token
+            r1 = await client.get(
+                "https://duckduckgo.com/",
+                params={"q": q, "iax": "images", "ia": "images"},
+            )
+            match = re.search(r"vqd=([^&'\"\s]+)", r1.text)
+            if not match:
+                return {"images": []}
+            vqd = match.group(1)
+            # Step 2: fetch image results
+            r2 = await client.get(
+                "https://duckduckgo.com/i.js",
+                params={"q": q, "o": "json", "vqd": vqd, "f": ",,,,,", "p": "1"},
+                headers={**hdrs, "Referer": "https://duckduckgo.com/"},
+            )
+            data = r2.json()
+            images = [item["image"] for item in data.get("results", [])[:4]]
+            return {"images": images}
+    except Exception:
+        return {"images": []}
 
 
 # --- Search history ---
