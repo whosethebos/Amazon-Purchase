@@ -1,15 +1,20 @@
 // frontend/components/SearchBar.tsx
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 
 type Props = {
   onSearch: (query: string) => void;
   isLoading?: boolean;
+  initialValue?: string;
 };
 
-export function SearchBar({ onSearch, isLoading }: Props) {
-  const [query, setQuery] = useState("");
+export function SearchBar({ onSearch, isLoading, initialValue }: Props) {
+  const [query, setQuery] = useState(initialValue ?? "");
+
+  useEffect(() => {
+    setQuery(initialValue ?? "");
+  }, [initialValue]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,21 +22,24 @@ export function SearchBar({ onSearch, isLoading }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
+    <form
+      onSubmit={handleSubmit}
+      className="bg-[#0f0f1a] border border-[#1f1f38] rounded-[14px] p-2.5 flex gap-2.5 shadow-[0_0_0_1px_rgba(249,115,22,0.12),_0_8px_32px_rgba(0,0,0,0.6)]"
+    >
       <input
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search for a product on Amazon..."
-        className="flex-1 px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-400 text-base"
+        className="flex-1 bg-transparent border-none outline-none text-[#ebebf5] placeholder-[#2e2e50] text-[15px] px-2"
         disabled={isLoading}
       />
       <button
         type="submit"
         disabled={isLoading || !query.trim()}
-        className="px-6 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 disabled:opacity-50 flex items-center gap-2"
+        className="bg-gradient-to-br from-[#f97316] to-[#ea580c] shadow-[0_4px_16px_rgba(249,115,22,0.35)] rounded-[10px] px-5 py-2.5 text-white font-bold flex items-center gap-2 disabled:opacity-40 transition-opacity"
       >
-        <Search size={18} />
+        <Search size={16} />
         {isLoading ? "Searching..." : "Search"}
       </button>
     </form>
