@@ -1,15 +1,18 @@
 // frontend/app/search/[id]/confirm/page.tsx
 "use client";
 import { useEffect, useState, useRef } from "react";
+import { useBaymax } from "@/lib/BaymaxContext";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmationGrid } from "@/components/ConfirmationGrid";
 import { ProgressFeed } from "@/components/ProgressFeed";
+import { StepIndicator } from "@/components/StepIndicator";
 import { useSSE } from "@/lib/useSSE";
 import { confirmProducts } from "@/lib/api";
 
 export default function ConfirmPage() {
   const { id: searchId } = useParams<{ id: string }>();
   const router = useRouter();
+  const { setState: setBaymaxState } = useBaymax();
   const { events } = useSSE(searchId);
   const [currentBatch, setCurrentBatch] = useState<any[]>([]);
   const [iteration, setIteration] = useState(0);
@@ -30,30 +33,31 @@ export default function ConfirmPage() {
         setMaxIterations(d.max_iterations ?? 3);
         setNeedsMoreDetail(d.needs_more_detail ?? false);
         setIsWaiting(false);
+        setBaymaxState("thinking");
       }
 
       if (event.event === "complete") {
+        setBaymaxState("done");
         router.push(`/search/${searchId}/results`);
       }
     });
-  }, [events, router, searchId]);
+  }, [events, router, searchId, setBaymaxState]);
 
   const handleConfirm = async (selectedIds: string[]) => {
     setIsWaiting(true);
     await confirmProducts(searchId, selectedIds);
-    // Pipeline resumes; redirect happens via "complete" SSE event
   };
 
   const handleNextBatch = async () => {
     setIsWaiting(true);
-    await confirmProducts(searchId, []); // empty = reject all, fetch next batch
+    await confirmProducts(searchId, []);
   };
 
   if (needsMoreDetail) {
     return (
       <main className="max-w-lg mx-auto px-4 py-16 text-center space-y-4">
-        <h2 className="text-xl font-semibold text-gray-900">Could not find a match</h2>
-        <p className="text-gray-500">
+        <h2 className="text-xl font-semibold text-[#ebebf5]">Could not find a match</h2>
+        <p className="text-[#7878a0]">
           After {iteration} attempts, we couldn&apos;t find the product you&apos;re looking for.
           Please try a more specific search query.
         </p>
@@ -69,12 +73,13 @@ export default function ConfirmPage() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-10 space-y-6">
-      <a href="/" className="text-sm text-gray-500 hover:text-gray-700">
+      <a href="/" className="text-sm text-[#818cf8] hover:text-indigo-300">
         ← Back
       </a>
+      <StepIndicator step={2} />
       <ProgressFeed events={events} />
       {isWaiting ? (
-        <div className="text-center py-16 text-gray-500">Working on it...</div>
+        <div className="text-center py-16 text-[#4a4a6a]">Working on it...</div>
       ) : currentBatch.length > 0 ? (
         <ConfirmationGrid
           products={currentBatch}
@@ -84,7 +89,7 @@ export default function ConfirmPage() {
           onNextBatch={handleNextBatch}
         />
       ) : (
-        <div className="text-center py-16 text-gray-400">Searching Amazon...</div>
+        <div className="text-center py-16 text-[#4a4a6a]">Searching Amazon...</div>
       )}
     </main>
   );
