@@ -61,3 +61,13 @@ export async function refreshWatchlistItem(watchlistId: string) {
   if (!res.ok) throw new Error("Failed to refresh price");
   return res.json();
 }
+
+export async function getPreviewImages(q: string): Promise<{ images: string[] }> {
+  try {
+    const res = await fetch(`${API_URL}/api/preview-images?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return { images: [] };
+    return res.json();
+  } catch {
+    return { images: [] };
+  }
+}
