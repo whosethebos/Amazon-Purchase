@@ -5,12 +5,13 @@ import re
 import httpx
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from models import SearchRequest, ConfirmationRequest
+from fastapi.responses import StreamingResponse, JSONResponse
+from models import SearchRequest, ConfirmationRequest, AnalyzeUrlRequest
 from agents.orchestrator import OrchestratorAgent
 import db.supabase_client as db
-from scraper.amazon import scrape_current_price
+from scraper.amazon import scrape_current_price, scrape_product_details
 from config import settings
+from llm.analyze import run_llm_analysis
 
 app = FastAPI(title="Amazon Research Tool")
 
@@ -212,3 +213,46 @@ async def refresh_watchlist_item(watchlist_id: str):
         db.update_watchlist_checked(watchlist_id)
 
     return {"price": price_data}
+
+
+@app.post("/api/analyze-url")
+async def analyze_url(req: AnalyzeUrlRequest):
+    """Scrape and LLM-analyze a single Amazon product URL. 60-second best-effort timeout."""
+    try:
+        async with asyncio.timeout(60):
+            asin_match = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", req.url)
+            if not asin_match:
+                return JSONResponse(
+                    status_code=422,
+                    content={"error": "Could not extract ASIN from URL"},
+                )
+            asin = asin_match.group(1)
+
+            product_data = await scrape_product_details(req.url)
+            reviews = product_data["reviews"]
+            analysis = await run_llm_analysis(product_data["title"], reviews)
+
+            valid_indices = [
+                i for i in analysis.get("featured_review_indices", [])
+                if 0 <= i < len(reviews)
+            ]
+            if not valid_indices and reviews:
+                valid_indices = [0]
+            analysis["featured_review_indices"] = valid_indices
+
+            return {
+                "product": {
+                    k: product_data[k]
+                    for k in ("asin", "title", "price", "currency", "rating", "review_count", "image_url")
+                },
+                "histogram": product_data["histogram"],
+                "analysis": analysis,
+                "reviews": reviews,
+            }
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Analysis timed out after 60 seconds"},
+        )
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})

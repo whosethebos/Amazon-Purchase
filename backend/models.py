@@ -73,3 +73,7 @@ class SearchHistoryItem(BaseModel):
 class SSEEvent(BaseModel):
     event: str   # "status" | "batch_ready" | "analysis_done" | "complete" | "error"
     data: dict
+
+
+class AnalyzeUrlRequest(BaseModel):
+    url: str
