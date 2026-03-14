@@ -1,0 +1,50 @@
+# backend/tests/test_analyze_url.py
+import pytest
+from scraper.amazon import _sort_products_by_rating, _extract_asin
+
+
+# ── _sort_products_by_rating ────────────────────────────────────────────────────
+
+def test_sort_by_rating_descending():
+    products = [
+        {"asin": "A1", "rating": 3.2},
+        {"asin": "A2", "rating": 4.8},
+        {"asin": "A3", "rating": None},
+        {"asin": "A4", "rating": 4.1},
+    ]
+    result = _sort_products_by_rating(products)
+    assert [p["asin"] for p in result] == ["A2", "A4", "A1", "A3"]
+
+
+def test_sort_empty_list():
+    assert _sort_products_by_rating([]) == []
+
+
+def test_sort_all_none_ratings():
+    products = [{"asin": "A1", "rating": None}, {"asin": "A2", "rating": None}]
+    result = _sort_products_by_rating(products)
+    assert len(result) == 2  # order unspecified, just no crash
+
+
+# ── _extract_asin ───────────────────────────────────────────────────────────────
+
+def test_extract_asin_dp_url():
+    assert _extract_asin("https://www.amazon.com/dp/B0XXXXXXXX") == "B0XXXXXXXX"
+
+
+def test_extract_asin_gp_url():
+    assert _extract_asin("https://www.amazon.com/gp/product/B012345678") == "B012345678"
+
+
+def test_extract_asin_with_title_slug():
+    assert _extract_asin(
+        "https://www.amazon.com/Some-Product-Name/dp/B0ABCDE123"
+    ) == "B0ABCDE123"
+
+
+def test_extract_asin_no_match():
+    assert _extract_asin("https://www.amazon.com/s?k=laptop") is None
+
+
+def test_extract_asin_no_trailing_slash_required():
+    assert _extract_asin("https://www.amazon.com/dp/B0XXXXXXXX/ref=...") == "B0XXXXXXXX"

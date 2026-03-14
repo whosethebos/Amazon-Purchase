@@ -2,6 +2,18 @@
 import asyncio
 from playwright.async_api import async_playwright
 from config import settings
+import re as _re
+
+
+def _extract_asin(url: str) -> str | None:
+    """Extract ASIN from an Amazon product URL. Returns None if not found."""
+    m = _re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", url)
+    return m.group(1) if m else None
+
+
+def _sort_products_by_rating(products: list[dict]) -> list[dict]:
+    """Sort products by rating descending; products with no rating sort last."""
+    return sorted(products, key=lambda p: p.get("rating") or 0, reverse=True)
 
 
 async def _get_page(playwright):
@@ -44,7 +56,7 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                         continue
 
                     # Title
-                    title_el = await item.query_selector("h2 a span")
+                    title_el = await item.query_selector("h2 span")
                     title = await title_el.inner_text() if title_el else ""
 
                     # Price
@@ -52,7 +64,9 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                     price_el = await item.query_selector(".a-price .a-offscreen")
                     if price_el:
                         price_text = await price_el.inner_text()
-                        price_text = price_text.replace("$", "").replace(",", "").strip()
+                        # Strip any currency symbol/prefix and whitespace
+                        import re
+                        price_text = re.sub(r"[^\d.]", "", price_text)
                         try:
                             price = float(price_text)
                         except ValueError:
@@ -82,7 +96,7 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                             pass
 
                     # Product URL
-                    link_el = await item.query_selector("h2 a")
+                    link_el = await item.query_selector("a[href*='/dp/']")
                     href = await link_el.get_attribute("href") if link_el else ""
                     product_url = f"https://www.amazon.com{href}" if href else ""
 
@@ -104,7 +118,7 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                 except Exception:
                     continue
 
-            return products
+            return _sort_products_by_rating(products)
         finally:
             await browser.close()
 
