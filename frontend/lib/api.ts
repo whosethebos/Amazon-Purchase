@@ -1,5 +1,6 @@
 // frontend/lib/api.ts
 import { API_URL } from "./config";
+import type { AnalyzeUrlResponse } from "./types";
 
 export async function startSearch(query: string, maxResults = 10): Promise<{ search_id: string }> {
   const res = await fetch(`${API_URL}/api/search`, {
@@ -70,4 +71,18 @@ export async function getPreviewImages(q: string): Promise<{ images: string[] }>
   } catch {
     return { images: [] };
   }
+}
+
+export async function analyzeUrl(url: string, signal?: AbortSignal): Promise<AnalyzeUrlResponse> {
+  const res = await fetch(`${API_URL}/api/analyze-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(err.error ?? "Request failed");
+  }
+  return res.json();
 }
