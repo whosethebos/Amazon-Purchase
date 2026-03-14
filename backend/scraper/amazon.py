@@ -210,3 +210,151 @@ async def scrape_current_price(product_url: str) -> dict | None:
             return None
         finally:
             await browser.close()
+
+
+async def scrape_product_details(url: str) -> dict:
+    """
+    Scrape a product detail page + its reviews page for full single-product analysis.
+
+    Uses a single browser session with two sequential page.goto() calls:
+    1. Product /dp/ page — title, price, rating, review count, image
+    2. /product-reviews/{asin} page — rating histogram + up to 20 reviews
+
+    Returns:
+    {
+      "asin": str,
+      "title": str,
+      "price": float | None,
+      "currency": str | None,       # always "USD" (only amazon.com supported)
+      "rating": float | None,
+      "review_count": int | None,
+      "image_url": str | None,
+      "histogram": {"5": float, "4": float, "3": float, "2": float, "1": float},
+      "reviews": [{"stars": int, "author": str, "title": str, "body": str}, ...]
+    }
+    """
+    asin = _extract_asin(url) or ""
+    empty_histogram = {"5": 0.0, "4": 0.0, "3": 0.0, "2": 0.0, "1": 0.0}
+
+    async with async_playwright() as playwright:
+        browser, page = await _get_page(playwright)
+        try:
+            # ── Navigation 1: product page ──────────────────────────────────────
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            await asyncio.sleep(2)
+
+            # Title
+            title_el = await page.query_selector("#productTitle")
+            title = (await title_el.inner_text()).strip() if title_el else ""
+
+            # Price
+            price = None
+            price_el = await page.query_selector(".a-offscreen")
+            if price_el:
+                raw = (await price_el.inner_text()).strip().replace(",", "")
+                try:
+                    price = float("".join(c for c in raw if c.isdigit() or c == "."))
+                except ValueError:
+                    pass
+
+            currency = "USD"
+
+            # Rating (e.g. "4.3 out of 5 stars")
+            rating = None
+            rating_el = await page.query_selector(
+                "[data-hook='rating-out-of-text'], #acrPopover span.a-icon-alt"
+            )
+            if rating_el:
+                try:
+                    rating = float((await rating_el.inner_text()).split()[0])
+                except (ValueError, IndexError):
+                    pass
+
+            # Review count
+            review_count = None
+            rc_el = await page.query_selector("#acrCustomerReviewText")
+            if rc_el:
+                try:
+                    review_count = int(
+                        (await rc_el.inner_text()).replace(",", "").split()[0]
+                    )
+                except (ValueError, IndexError):
+                    pass
+
+            # Main image
+            image_url = None
+            img_el = await page.query_selector(
+                "#landingImage, [data-hook='main-image-container'] img"
+            )
+            if img_el:
+                image_url = await img_el.get_attribute("src")
+
+            # ── Navigation 2: reviews page ──────────────────────────────────────
+            histogram = dict(empty_histogram)
+            reviews: list[dict] = []
+
+            if asin:
+                await page.goto(
+                    f"https://www.amazon.com/product-reviews/{asin}",
+                    wait_until="domcontentloaded",
+                    timeout=30000,
+                )
+                await asyncio.sleep(2)
+
+                # Histogram percentages: #histogramTable rows[0]=5★ ... rows[4]=1★
+                stars_order = [5, 4, 3, 2, 1]
+                rows = await page.query_selector_all("#histogramTable tr")
+                for i, row in enumerate(rows[:5]):
+                    tds = await row.query_selector_all("td")
+                    if tds:
+                        try:
+                            text = await tds[-1].inner_text()
+                            histogram[str(stars_order[i])] = float(
+                                text.strip().replace("%", "").strip()
+                            )
+                        except (ValueError, IndexError):
+                            pass
+
+                # Reviews (up to 20)
+                review_els = await page.query_selector_all("[data-hook='review']")
+                for el in review_els[:20]:
+                    try:
+                        stars = 0
+                        star_el = await el.query_selector(
+                            "[data-hook='review-star-rating'] .a-icon-alt"
+                        )
+                        if star_el:
+                            stars = int(float((await star_el.inner_text()).split()[0]))
+
+                        author_el = await el.query_selector(".a-profile-name")
+                        author = (await author_el.inner_text()).strip() if author_el else ""
+
+                        title_el_r = await el.query_selector(
+                            "[data-hook='review-title'] span:not(.a-icon-alt)"
+                        )
+                        review_title = (
+                            (await title_el_r.inner_text()).strip() if title_el_r else ""
+                        )
+
+                        body_el = await el.query_selector("[data-hook='review-body'] span")
+                        body = (await body_el.inner_text()).strip() if body_el else ""
+
+                        reviews.append(
+                            {"stars": stars, "author": author, "title": review_title, "body": body}
+                        )
+                    except Exception:
+                        continue
+
+            return {
+                "asin": asin,
+                "title": title,
+                "price": price,
+                "currency": currency,
+                "rating": rating,
+                "review_count": review_count,
+                "image_url": image_url,
+                "histogram": histogram,
+                "reviews": reviews,
+            }
+        finally:
+            await browser.close()
