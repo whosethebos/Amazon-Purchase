@@ -48,3 +48,24 @@ def test_extract_asin_no_match():
 
 def test_extract_asin_no_trailing_slash_required():
     assert _extract_asin("https://www.amazon.com/dp/B0XXXXXXXX/ref=...") == "B0XXXXXXXX"
+
+
+from unittest.mock import AsyncMock, patch
+from llm.analyze import run_llm_analysis, _LLM_FALLBACK
+
+
+# ── run_llm_analysis ────────────────────────────────────────────────────────────
+
+async def test_run_llm_analysis_fallback_on_exception():
+    """When chat_json raises, run_llm_analysis returns the empty fallback."""
+    with patch("llm.analyze.chat_json", new=AsyncMock(side_effect=Exception("LLM down"))):
+        result = await run_llm_analysis("Test Product", [])
+    assert result == _LLM_FALLBACK
+
+
+async def test_run_llm_analysis_fallback_on_json_decode_error():
+    """When chat_json raises JSONDecodeError, run_llm_analysis returns fallback."""
+    import json
+    with patch("llm.analyze.chat_json", new=AsyncMock(side_effect=json.JSONDecodeError("bad", "", 0))):
+        result = await run_llm_analysis("Test Product", [{"stars": 5, "title": "Good", "body": "Nice"}])
+    assert result == _LLM_FALLBACK
