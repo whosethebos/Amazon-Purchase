@@ -43,8 +43,16 @@ function HomeContent() {
     loadData();
   }, [loadData]);
 
+  const AMAZON_ASIN_RE = /^https?:\/\/(www\.)?amazon\.com\/(dp|gp\/product)\/([A-Z0-9]{10})/;
+
   const handleSearch = (query: string) => {
     setBaymaxState("searching");
+    const match = query.trim().match(AMAZON_ASIN_RE);
+    if (match) {
+      const asin = match[3];
+      router.push(`/search/url-analysis?asin=${asin}&url=${encodeURIComponent(query.trim())}`);
+      return;
+    }
     router.push(`/search/preview?q=${encodeURIComponent(query)}`);
   };
 
