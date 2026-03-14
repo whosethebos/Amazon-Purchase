@@ -65,8 +65,7 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                     if price_el:
                         price_text = await price_el.inner_text()
                         # Strip any currency symbol/prefix and whitespace
-                        import re
-                        price_text = re.sub(r"[^\d.]", "", price_text)
+                        price_text = _re.sub(r"[^\d.]", "", price_text)
                         try:
                             price = float(price_text)
                         except ValueError:
