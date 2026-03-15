@@ -2,7 +2,6 @@
 "use client";
 import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useBaymax } from "@/lib/BaymaxContext";
 import { getPreviewImages, startSearch } from "@/lib/api";
 import { StepIndicator } from "@/components/StepIndicator";
 
@@ -10,7 +9,6 @@ function PreviewContent() {
   const searchParams = useSearchParams();
   const q = searchParams.get("q")?.trim() ?? "";
   const router = useRouter();
-  const { setState: setBaymaxState } = useBaymax();
 
   const [images, setImages] = useState<string[]>([]);
   const [isLoadingImages, setIsLoadingImages] = useState(true);
@@ -25,7 +23,6 @@ function PreviewContent() {
   // Fetch preview images
   useEffect(() => {
     if (!q) return;
-    setBaymaxState("searching");
     setIsLoadingImages(true);
     getPreviewImages(q)
       .then((result) => setImages(result.images))
@@ -34,20 +31,17 @@ function PreviewContent() {
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNo = () => {
-    setBaymaxState("idle");
     router.push(`/?q=${encodeURIComponent(q)}`);
   };
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
     setSubmitError(null);
-    setBaymaxState("thinking");
     try {
       const { search_id } = await startSearch(q);
       router.push(`/search/${search_id}/confirm`);
     } catch {
       setIsSubmitting(false);
-      setBaymaxState("error");
       setSubmitError("Something went wrong. Please try again.");
     }
   };

@@ -1,7 +1,6 @@
 // frontend/app/page.tsx
 "use client";
 import { useState, useEffect, useCallback, Suspense } from "react";
-import { useBaymax } from "@/lib/BaymaxContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SearchBar } from "@/components/SearchBar";
 import { WatchlistCard } from "@/components/WatchlistCard";
@@ -18,16 +17,9 @@ function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") ?? "";
-  const { setState: setBaymaxState } = useBaymax();
-
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
-
-  // Reset stale avatar state on mount/return
-  useEffect(() => {
-    setBaymaxState("idle");
-  }, [setBaymaxState]);
 
   const loadData = useCallback(async () => {
     try {
@@ -43,14 +35,19 @@ function HomeContent() {
     loadData();
   }, [loadData]);
 
-  const AMAZON_ASIN_RE = /^https?:\/\/(www\.)?amazon\.com\/(dp|gp\/product)\/([A-Z0-9]{10})/;
+  const AMAZON_ASIN_RE = /^https?:\/\/(www\.)?amazon\.\w+(\.\w+)?\/(dp|gp\/product)\/([A-Z0-9]{10})/;
+  const AMAZON_URL_RE = /^https?:\/\/(www\.)?amazon\.|^https?:\/\/amzn\./i;
 
   const handleSearch = (query: string) => {
-    setBaymaxState("searching");
-    const match = query.trim().match(AMAZON_ASIN_RE);
-    if (match) {
-      const asin = match[3];
-      router.push(`/search/url-analysis?asin=${asin}&url=${encodeURIComponent(query.trim())}`);
+    const trimmed = query.trim();
+    const asinMatch = trimmed.match(AMAZON_ASIN_RE);
+    if (asinMatch) {
+      const asin = asinMatch[4];
+      router.push(`/search/url-analysis?asin=${asin}&url=${encodeURIComponent(trimmed)}`);
+      return;
+    }
+    if (AMAZON_URL_RE.test(trimmed)) {
+      router.push(`/search/url-analysis?url=${encodeURIComponent(trimmed)}`);
       return;
     }
     router.push(`/search/preview?q=${encodeURIComponent(query)}`);
@@ -73,13 +70,7 @@ function HomeContent() {
 
   const handleRefreshAll = async () => {
     setIsRefreshingAll(true);
-    for (const item of watchlist) {
-      try {
-        await refreshWatchlistItem(item.id);
-      } catch {
-        // continue with remaining items
-      }
-    }
+    await Promise.allSettled(watchlist.map((item) => refreshWatchlistItem(item.id)));
     await loadData();
     setIsRefreshingAll(false);
   };

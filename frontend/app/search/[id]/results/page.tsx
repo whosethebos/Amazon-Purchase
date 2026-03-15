@@ -1,7 +1,6 @@
 // frontend/app/search/[id]/results/page.tsx
 "use client";
 import { useEffect, useState } from "react";
-import { useBaymax } from "@/lib/BaymaxContext";
 import { useParams } from "next/navigation";
 import { ProductCard } from "@/components/ProductCard";
 import { StepIndicator } from "@/components/StepIndicator";
@@ -9,7 +8,6 @@ import { getResults, addToWatchlist } from "@/lib/api";
 
 export default function ResultsPage() {
   const { id: searchId } = useParams<{ id: string }>();
-  const { setState: setBaymaxState } = useBaymax();
   const [search, setSearch] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,11 +18,10 @@ export default function ResultsPage() {
       .then(({ search, products }) => {
         setSearch(search);
         setProducts(products);
-        setBaymaxState("done");
       })
-      .catch(() => setBaymaxState("error"))
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, [searchId, setBaymaxState]);
+  }, [searchId]);
 
   const handleAddToWatchlist = async (productId: string) => {
     await addToWatchlist(productId);

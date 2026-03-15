@@ -1,18 +1,95 @@
 // frontend/app/search/[id]/confirm/page.tsx
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { useBaymax } from "@/lib/BaymaxContext";
 import { useParams, useRouter } from "next/navigation";
 import { ConfirmationGrid } from "@/components/ConfirmationGrid";
 import { ProgressFeed } from "@/components/ProgressFeed";
 import { StepIndicator } from "@/components/StepIndicator";
 import { useSSE } from "@/lib/useSSE";
 import { confirmProducts } from "@/lib/api";
+import type { SSEEvent } from "@/lib/useSSE";
+
+// ── Workflow status panel ────────────────────────────────────────────────────
+
+type Phase = "scraping" | "analyzing" | "ranking" | "done";
+
+const PHASE_ORDER: Phase[] = ["scraping", "analyzing", "ranking", "done"];
+
+const PHASE_LABELS: Record<Phase, string> = {
+  scraping:  "Scraping reviews",
+  analyzing: "AI analysis",
+  ranking:   "Ranking results",
+  done:      "Complete",
+};
+
+function detectPhase(events: SSEEvent[]): Phase {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i];
+    const status = (e.data as { status?: string }).status;
+    if (e.event === "complete" || e.event === "analysis_done") return "done";
+    if (status === "ranking")   return "ranking";
+    if (status === "analyzing") return "analyzing";
+    if (status === "scraping")  return "scraping";
+  }
+  return "scraping";
+}
+
+function WorkflowStatus({ events }: { events: SSEEvent[] }) {
+  const phase = detectPhase(events);
+  const phaseIdx = PHASE_ORDER.indexOf(phase);
+  const latestMsg = events.length > 0
+    ? String((events[events.length - 1].data as { message?: string }).message ?? "")
+    : null;
+
+  return (
+    <div className="space-y-4 py-6">
+      {/* Phase stepper */}
+      <div className="flex items-center gap-1">
+        {(["scraping", "analyzing", "ranking"] as Phase[]).map((p, i) => {
+          const idx = PHASE_ORDER.indexOf(p);
+          const isDone   = phaseIdx > idx;
+          const isActive = phaseIdx === idx;
+          return (
+            <div key={p} className="flex items-center gap-1 flex-1 min-w-0">
+              <div className={`flex items-center gap-1.5 shrink-0 ${
+                isDone   ? "text-emerald-400" :
+                isActive ? "text-orange-400"  :
+                           "text-[#3a3a58]"
+              }`}>
+                {isDone ? (
+                  <span className="text-sm">✓</span>
+                ) : isActive ? (
+                  <span className="inline-block w-3 h-3 rounded-full border-2 border-orange-400 border-t-transparent animate-spin" />
+                ) : (
+                  <span className="w-3 h-3 rounded-full border border-[#3a3a58] inline-block" />
+                )}
+                <span className={`text-xs font-medium whitespace-nowrap ${
+                  isDone ? "text-emerald-400" : isActive ? "text-[#ebebf5]" : "text-[#3a3a58]"
+                }`}>
+                  {PHASE_LABELS[p]}
+                </span>
+              </div>
+              {i < 2 && (
+                <div className={`flex-1 h-px mx-1 ${phaseIdx > idx ? "bg-emerald-800" : "bg-[#1e1e30]"}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Latest message */}
+      {latestMsg && (
+        <p className="text-xs text-[#5a5a80] text-center truncate px-2">{latestMsg}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConfirmPage() {
   const { id: searchId } = useParams<{ id: string }>();
   const router = useRouter();
-  const { setState: setBaymaxState } = useBaymax();
   const { events } = useSSE(searchId);
   const [currentBatch, setCurrentBatch] = useState<any[]>([]);
   const [iteration, setIteration] = useState(0);
@@ -26,6 +103,7 @@ export default function ConfirmPage() {
       if (processedEvents.current.has(idx)) return;
       processedEvents.current.add(idx);
 
+      // Keep Baymax speech bubble in sync with latest status
       if (event.event === "batch_ready") {
         const d = event.data as any;
         setCurrentBatch(d.batch ?? []);
@@ -33,15 +111,13 @@ export default function ConfirmPage() {
         setMaxIterations(d.max_iterations ?? 3);
         setNeedsMoreDetail(d.needs_more_detail ?? false);
         setIsWaiting(false);
-        setBaymaxState("thinking");
       }
 
       if (event.event === "complete") {
-        setBaymaxState("done");
         router.push(`/search/${searchId}/results`);
       }
     });
-  }, [events, router, searchId, setBaymaxState]);
+  }, [events, router, searchId]);
 
   const handleConfirm = async (selectedIds: string[]) => {
     setIsWaiting(true);
@@ -79,7 +155,7 @@ export default function ConfirmPage() {
       <StepIndicator step={2} />
       <ProgressFeed events={events} />
       {isWaiting ? (
-        <div className="text-center py-16 text-[#4a4a6a]">Working on it...</div>
+        <WorkflowStatus events={events} />
       ) : currentBatch.length > 0 ? (
         <ConfirmationGrid
           products={currentBatch}

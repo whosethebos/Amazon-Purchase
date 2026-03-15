@@ -30,17 +30,17 @@ export function ProductCard({ product, onAddToWatchlist }: Props) {
   const { analysis } = product;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 flex gap-4">
+    <div className="bg-[#141418] rounded-xl border border-[#252530] p-5 flex gap-4 hover:border-[#353548] transition-colors">
       {/* Rank badge */}
       {analysis?.rank && (
-        <div className="flex-shrink-0 w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold text-lg self-start mt-1">
+        <div className="flex-shrink-0 w-10 h-10 bg-orange-500 text-white rounded-full flex items-center justify-center font-bold text-lg self-start mt-1 font-mono">
           {analysis.rank}
         </div>
       )}
 
       {/* Image */}
       {product.image_url && (
-        <div className="flex-shrink-0 w-24 h-24 relative rounded-lg overflow-hidden bg-gray-100">
+        <div className="flex-shrink-0 w-24 h-24 relative rounded-lg overflow-hidden bg-[#1c1c22]">
           <Image
             src={product.image_url}
             alt={product.title}
@@ -54,19 +54,19 @@ export function ProductCard({ product, onAddToWatchlist }: Props) {
       {/* Content */}
       <div className="flex-1 min-w-0 space-y-2">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-semibold text-gray-900 line-clamp-2">{product.title}</h3>
+          <h3 className="font-semibold text-[#ebebf5] line-clamp-2">{product.title}</h3>
           {analysis?.score != null && (
-            <span className="flex-shrink-0 text-sm font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+            <span className="flex-shrink-0 text-sm font-bold text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full font-mono">
               {analysis.score}/100
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-3 text-sm text-gray-500">
+        <div className="flex items-center gap-3 text-sm text-[#7878a0]">
           {product.price && (
-            <span className="text-lg font-bold text-gray-900">${product.price}</span>
+            <span className="text-lg font-bold text-[#ebebf5] font-mono">${product.price}</span>
           )}
-          {product.rating && <span>★ {product.rating}</span>}
+          {product.rating && <span className="text-amber-400">★ {product.rating}</span>}
           {product.review_count && (
             <span>({product.review_count.toLocaleString()} reviews)</span>
           )}
@@ -74,18 +74,18 @@ export function ProductCard({ product, onAddToWatchlist }: Props) {
 
         {analysis && (
           <div className="space-y-1">
-            <p className="text-sm text-gray-600">{analysis.summary}</p>
+            <p className="text-sm text-[#9898b8]">{analysis.summary}</p>
             <div className="flex flex-wrap gap-x-4 text-xs">
               {analysis.pros.length > 0 && (
                 <div>
-                  <span className="text-green-600 font-semibold">Pros: </span>
-                  {analysis.pros.slice(0, 2).join(" · ")}
+                  <span className="text-emerald-400 font-semibold">Pros: </span>
+                  <span className="text-[#7878a0]">{analysis.pros.slice(0, 2).join(" · ")}</span>
                 </div>
               )}
               {analysis.cons.length > 0 && (
                 <div>
-                  <span className="text-red-500 font-semibold">Cons: </span>
-                  {analysis.cons.slice(0, 2).join(" · ")}
+                  <span className="text-red-400 font-semibold">Cons: </span>
+                  <span className="text-[#7878a0]">{analysis.cons.slice(0, 2).join(" · ")}</span>
                 </div>
               )}
             </div>
@@ -98,14 +98,14 @@ export function ProductCard({ product, onAddToWatchlist }: Props) {
             href={product.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-sm text-orange-500 hover:underline"
+            className="flex items-center gap-1 text-sm text-orange-400 hover:text-orange-300 transition-colors"
           >
             <ExternalLink size={14} /> View on Amazon
           </a>
           {onAddToWatchlist && (
             <button
               onClick={() => onAddToWatchlist(product.id)}
-              className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+              className="flex items-center gap-1 text-sm text-[#7878a0] hover:text-[#ebebf5] transition-colors"
             >
               <Plus size={14} /> Watchlist
             </button>
