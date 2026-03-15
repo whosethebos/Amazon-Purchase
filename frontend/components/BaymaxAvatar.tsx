@@ -1,6 +1,6 @@
 // frontend/components/BaymaxAvatar.tsx
 "use client";
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useBaymax } from "./BaymaxContext";
 
 // ─── Configurable content (edit for other projects) ───────────────────────
@@ -19,15 +19,24 @@ const QUOTES = [
   "Hairy baby.",
   "Your health is my only concern.",
 ];
+
+const HOVER_GREETINGS = [
+  "Hello. I am Baymax.",
+  "How can I help you today?",
+  "I detected your cursor. Are you okay?",
+  "Fist bump?",
+];
 // ──────────────────────────────────────────────────────────────────────────
 
-function randomQuote(): string {
-  return QUOTES[Math.floor(Math.random() * QUOTES.length)];
+function randomFrom(arr: string[]): string {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
 export function BaymaxAvatar() {
   const { message, say, dismiss, currentPage } = useBaymax();
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [hovered, setHovered] = useState(false);
 
   // Auto-dismiss after 4 seconds whenever message changes
   useEffect(() => {
@@ -53,12 +62,25 @@ export function BaymaxAvatar() {
     if (message) {
       dismiss();
     } else {
-      say(randomQuote());
+      say(randomFrom(QUOTES));
     }
   }, [message, dismiss, say]);
 
+  const handleMouseEnter = useCallback(() => {
+    setHovered(true);
+    // Show a greeting after 800ms of hovering (don't interrupt existing message)
+    hoverTimer.current = setTimeout(() => {
+      if (!message) say(randomFrom(HOVER_GREETINGS));
+    }, 800);
+  }, [message, say]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHovered(false);
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+  }, []);
+
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
+    <div style={{ position: "fixed", bottom: "2rem", right: "1.5rem", zIndex: 50 }} className="flex flex-col items-end gap-2">
       {/* Speech bubble */}
       {message && (
         <div
@@ -67,24 +89,33 @@ export function BaymaxAvatar() {
           style={{ animation: "baymax-speech-in 0.25s ease-out forwards" }}
         >
           <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-indigo-400">
-            Tip
+            Baymax
           </span>
           {message}
         </div>
       )}
 
-      {/* Avatar bubble */}
+      {/* Avatar */}
       <button
         onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         aria-label="Baymax assistant"
-        className="h-16 w-16 rounded-full overflow-hidden bg-white shadow-lg cursor-pointer border-0 p-0"
+        className="cursor-pointer border-0 p-0 bg-transparent"
         style={{ animation: "baymax-float-glow 3s ease-in-out infinite" }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/baymax.png"
           alt="Baymax"
-          className="h-full w-full object-cover"
+          className="h-36 w-auto"
+          style={{
+            transform: hovered ? "scale(1.08)" : "scale(1)",
+            filter: hovered
+              ? "drop-shadow(0 0 18px rgba(165, 180, 252, 0.6))"
+              : "none",
+            transition: "transform 0.25s ease, filter 0.25s ease",
+          }}
         />
       </button>
     </div>
