@@ -64,7 +64,7 @@ export function BaymaxAvatar() {
         <div
           onClick={dismiss}
           className="cursor-pointer max-w-[220px] rounded-[14px_14px_4px_14px] border border-indigo-600 bg-[#0e0e2a] px-3.5 py-2.5 text-[13px] leading-snug text-[#e0e0f0] shadow-xl"
-          style={{ animation: "baymax-speech-in 0.25s ease-out" }}
+          style={{ animation: "baymax-speech-in 0.25s ease-out forwards" }}
         >
           <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-indigo-400">
             Tip

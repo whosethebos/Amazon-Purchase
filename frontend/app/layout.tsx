@@ -28,8 +28,8 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <BaymaxProvider>
-          <BaymaxAvatar />
           {children}
+          <BaymaxAvatar />
         </BaymaxProvider>
       </body>
     </html>
