@@ -4,11 +4,14 @@ import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getPreviewImages, startSearch } from "@/lib/api";
 import { StepIndicator } from "@/components/StepIndicator";
+import { useBaymax } from "@/components/BaymaxContext";
 
 function PreviewContent() {
   const searchParams = useSearchParams();
   const q = searchParams.get("q")?.trim() ?? "";
   const router = useRouter();
+  const { setPage } = useBaymax();
+  useEffect(() => { setPage("preview"); }, [setPage]);
 
   const [images, setImages] = useState<string[]>([]);
   const [isLoadingImages, setIsLoadingImages] = useState(true);

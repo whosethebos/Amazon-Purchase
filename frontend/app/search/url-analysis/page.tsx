@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { analyzeUrl } from "@/lib/api";
 import type { AnalyzeUrlResponse, Histogram, Review } from "@/lib/types";
+import { useBaymax } from "@/components/BaymaxContext";
 
 // ─── ReviewCard ────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,8 @@ function UrlAnalysisContent() {
   const asin = searchParams.get("asin");
   const urlParam = searchParams.get("url");
   const resolvedUrl = urlParam ?? (asin ? `https://www.amazon.com/dp/${asin}` : null);
+  const { setPage } = useBaymax();
+  useEffect(() => { setPage("url-analysis"); }, [setPage]);
 
   const [data, setData] = useState<AnalyzeUrlResponse | null>(null);
   const [error, setError] = useState<string | null>(null);

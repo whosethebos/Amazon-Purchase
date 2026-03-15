@@ -5,9 +5,12 @@ import { useParams } from "next/navigation";
 import { ProductCard } from "@/components/ProductCard";
 import { StepIndicator } from "@/components/StepIndicator";
 import { getResults, addToWatchlist } from "@/lib/api";
+import { useBaymax } from "@/components/BaymaxContext";
 
 export default function ResultsPage() {
   const { id: searchId } = useParams<{ id: string }>();
+  const { setPage } = useBaymax();
+  useEffect(() => { setPage("results"); }, [setPage]);
   const [search, setSearch] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

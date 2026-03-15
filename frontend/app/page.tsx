@@ -12,6 +12,7 @@ import {
   refreshWatchlistItem,
   deleteSearch,
 } from "@/lib/api";
+import { useBaymax } from "@/components/BaymaxContext";
 
 function HomeContent() {
   const router = useRouter();
@@ -20,6 +21,8 @@ function HomeContent() {
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+  const { setPage } = useBaymax();
+  useEffect(() => { setPage("home"); }, [setPage]);
 
   const loadData = useCallback(async () => {
     try {

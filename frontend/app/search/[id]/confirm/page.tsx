@@ -8,6 +8,7 @@ import { StepIndicator } from "@/components/StepIndicator";
 import { useSSE } from "@/lib/useSSE";
 import { confirmProducts } from "@/lib/api";
 import type { SSEEvent } from "@/lib/useSSE";
+import { useBaymax } from "@/components/BaymaxContext";
 
 // ── Workflow status panel ────────────────────────────────────────────────────
 
@@ -91,6 +92,8 @@ export default function ConfirmPage() {
   const { id: searchId } = useParams<{ id: string }>();
   const router = useRouter();
   const { events } = useSSE(searchId);
+  const { setPage } = useBaymax();
+  useEffect(() => { setPage("confirm"); }, [setPage]);
   const [currentBatch, setCurrentBatch] = useState<any[]>([]);
   const [iteration, setIteration] = useState(0);
   const [maxIterations, setMaxIterations] = useState(3);
