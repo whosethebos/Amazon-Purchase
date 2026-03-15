@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     supabase_key: str = ""
 
     # Scraping
+    amazon_domain: str = "amazon.in"
     amazon_batch_size: int = 5
     max_confirmation_iterations: int = 3
     max_reviews_per_product: int = 20

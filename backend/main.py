@@ -1,15 +1,14 @@
 # backend/main.py
 import asyncio
-import json
-import re
 import httpx
+import json
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from models import SearchRequest, ConfirmationRequest, AnalyzeUrlRequest
 from agents.orchestrator import OrchestratorAgent
 import db.supabase_client as db
-from scraper.amazon import scrape_current_price, scrape_product_details
+from scraper.amazon import scrape_current_price, scrape_product_details, scrape_preview_images, extract_asin
 from config import settings
 from llm.analyze import run_llm_analysis
 
@@ -109,36 +108,9 @@ async def get_results(search_id: str):
 @app.get("/api/preview-images")
 async def get_preview_images(q: str):
     """Fetch up to 4 web image URLs for a query via DuckDuckGo (best-effort)."""
-    try:
-        hdrs = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        }
-        async with httpx.AsyncClient(timeout=5.0, headers=hdrs) as client:
-            # Step 1: get vqd token
-            r1 = await client.get(
-                "https://duckduckgo.com/",
-                params={"q": q, "iax": "images", "ia": "images"},
-            )
-            match = re.search(r"vqd=([^&'\"\s]+)", r1.text)
-            if not match:
-                return {"images": []}
-            vqd = match.group(1)
-            # Step 2: fetch image results
-            r2 = await client.get(
-                "https://duckduckgo.com/i.js",
-                params={"q": q, "o": "json", "vqd": vqd, "f": ",,,,,", "p": "1"},
-                headers={**hdrs, "Referer": "https://duckduckgo.com/"},
-            )
-            data = r2.json()
-            images = [item["image"] for item in data.get("results", [])[:4]]
-            return {"images": images}
-    except Exception:
-        return {"images": []}
+    images = await scrape_preview_images(q)
+    return {"images": images}
 
-
-# --- Search history ---
 
 @app.get("/api/searches")
 async def list_searches():
@@ -217,18 +189,24 @@ async def refresh_watchlist_item(watchlist_id: str):
 
 @app.post("/api/analyze-url")
 async def analyze_url(req: AnalyzeUrlRequest):
-    """Scrape and LLM-analyze a single Amazon product URL. 60-second best-effort timeout."""
+    """Scrape and LLM-analyze a single Amazon product URL."""
     try:
-        async with asyncio.timeout(60):
-            asin_match = re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", req.url)
-            if not asin_match:
+        async with asyncio.timeout(180):
+            url = req.url
+            if not extract_asin(url):
+                # Short URL (e.g. amzn.in) — resolve redirect to get full URL
+                headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+                async with httpx.AsyncClient(follow_redirects=True, timeout=10, headers=headers) as client:
+                    resp = await client.get(url)
+                    url = str(resp.url)
+            asin = extract_asin(url)
+            if not asin:
                 return JSONResponse(
                     status_code=422,
                     content={"error": "Could not extract ASIN from URL"},
                 )
-            asin = asin_match.group(1)
 
-            product_data = await scrape_product_details(req.url)
+            product_data = await scrape_product_details(url)
             reviews = product_data["reviews"]
             analysis = await run_llm_analysis(product_data["title"], reviews)
 
@@ -252,7 +230,7 @@ async def analyze_url(req: AnalyzeUrlRequest):
     except asyncio.TimeoutError:
         return JSONResponse(
             status_code=500,
-            content={"error": "Analysis timed out after 60 seconds"},
+            content={"error": "Analysis timed out after 180 seconds"},
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})

@@ -5,7 +5,7 @@ from config import settings
 import re as _re
 
 
-def _extract_asin(url: str) -> str | None:
+def extract_asin(url: str) -> str | None:
     """Extract ASIN from an Amazon product URL. Returns None if not found."""
     m = _re.search(r"/(?:dp|gp/product)/([A-Z0-9]{10})", url)
     return m.group(1) if m else None
@@ -14,6 +14,17 @@ def _extract_asin(url: str) -> str | None:
 def _sort_products_by_rating(products: list[dict]) -> list[dict]:
     """Sort products by rating descending; products with no rating sort last."""
     return sorted(products, key=lambda p: p.get("rating") or 0, reverse=True)
+
+
+def _currency_for_domain(domain: str) -> str:
+    """Derive the currency code from an Amazon domain or URL string."""
+    if "amazon.in" in domain:
+        return "INR"
+    if "amazon.co.uk" in domain:
+        return "GBP"
+    if any(x in domain for x in ("amazon.de", "amazon.fr", "amazon.es", "amazon.it")):
+        return "EUR"
+    return "USD"
 
 
 async def _get_page(playwright):
@@ -39,10 +50,13 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
     Returns up to max_results products with: asin, title, price, rating,
     review_count, url, image_url.
     """
+    domain = settings.amazon_domain
+    currency = _currency_for_domain(domain)
+
     async with async_playwright() as playwright:
         browser, page = await _get_page(playwright)
         try:
-            url = f"https://www.amazon.com/s?k={query.replace(' ', '+')}"
+            url = f"https://www.{domain}/s?k={query.replace(' ', '+')}"
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
             await asyncio.sleep(2)  # brief pause to avoid bot detection
 
@@ -59,17 +73,21 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                     title_el = await item.query_selector("h2 span")
                     title = await title_el.inner_text() if title_el else ""
 
-                    # Price
+                    # Price — try multiple selectors to handle different layouts
                     price = None
-                    price_el = await item.query_selector(".a-price .a-offscreen")
-                    if price_el:
-                        price_text = await price_el.inner_text()
-                        # Strip any currency symbol/prefix and whitespace
-                        price_text = _re.sub(r"[^\d.]", "", price_text)
-                        try:
-                            price = float(price_text)
-                        except ValueError:
-                            pass
+                    for _sel in [
+                        ".a-price .a-offscreen",
+                        ".a-price-whole",
+                    ]:
+                        price_el = await item.query_selector(_sel)
+                        if price_el:
+                            price_text = _re.sub(r"[^\d.]", "", await price_el.inner_text())
+                            try:
+                                price = float(price_text)
+                                if price > 0:
+                                    break
+                            except ValueError:
+                                pass
 
                     # Rating
                     rating = None
@@ -97,18 +115,23 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                     # Product URL
                     link_el = await item.query_selector("a[href*='/dp/']")
                     href = await link_el.get_attribute("href") if link_el else ""
-                    product_url = f"https://www.amazon.com{href}" if href else ""
+                    product_url = f"https://www.{domain}{href}" if href else ""
 
-                    # Image
+                    # Image — try src first, fall back to data-src for lazy-loaded images
                     img_el = await item.query_selector(".s-image")
-                    image_url = await img_el.get_attribute("src") if img_el else None
+                    image_url = None
+                    if img_el:
+                        src = await img_el.get_attribute("src") or ""
+                        image_url = src if src.startswith("https://") else (
+                            await img_el.get_attribute("data-src") or None
+                        )
 
                     if asin and title:
                         products.append({
                             "asin": asin,
                             "title": title,
                             "price": price,
-                            "currency": "USD",
+                            "currency": currency,
                             "rating": rating,
                             "review_count": review_count,
                             "url": product_url,
@@ -233,7 +256,7 @@ async def scrape_product_details(url: str) -> dict:
       "reviews": [{"stars": int, "author": str, "title": str, "body": str}, ...]
     }
     """
-    asin = _extract_asin(url) or ""
+    asin = extract_asin(url) or ""
     empty_histogram = {"5": 0.0, "4": 0.0, "3": 0.0, "2": 0.0, "1": 0.0}
 
     async with async_playwright() as playwright:
@@ -247,17 +270,28 @@ async def scrape_product_details(url: str) -> dict:
             title_el = await page.query_selector("#productTitle")
             title = (await title_el.inner_text()).strip() if title_el else ""
 
-            # Price
+            # Price — try specific selectors first to avoid picking up MRP/crossed-out prices
             price = None
-            price_el = await page.query_selector(".a-offscreen")
-            if price_el:
-                raw = (await price_el.inner_text()).strip().replace(",", "")
-                try:
-                    price = float("".join(c for c in raw if c.isdigit() or c == "."))
-                except ValueError:
-                    pass
+            for _sel in [
+                ".apexPriceToPay .a-offscreen",         # sale/deal price (most reliable)
+                "#priceblock_dealprice",
+                "#priceblock_ourprice",
+                "span[id='price_inside_buybox']",
+                ".a-price[data-a-color='price'] .a-offscreen",
+                ".a-offscreen",                          # fallback
+            ]:
+                _el = await page.query_selector(_sel)
+                if _el:
+                    _raw = (await _el.inner_text()).strip().replace(",", "")
+                    try:
+                        _v = float("".join(c for c in _raw if c.isdigit() or c == "."))
+                        if _v > 0:
+                            price = _v
+                            break
+                    except ValueError:
+                        pass
 
-            currency = "USD"
+            currency = _currency_for_domain(url)
 
             # Rating (e.g. "4.3 out of 5 stars")
             rating = None
@@ -289,61 +323,60 @@ async def scrape_product_details(url: str) -> dict:
             if img_el:
                 image_url = await img_el.get_attribute("src")
 
-            # ── Navigation 2: reviews page ──────────────────────────────────────
+            # ── Histogram: parse .a-meter-bar style widths (order: 5★→1★) ─────────
+            # The separate /product-reviews page requires sign-in on some locales,
+            # so we scrape both histogram and reviews from the product page itself.
             histogram = dict(empty_histogram)
             reviews: list[dict] = []
 
-            if asin:
-                await page.goto(
-                    f"https://www.amazon.com/product-reviews/{asin}",
-                    wait_until="domcontentloaded",
-                    timeout=30000,
-                )
-                await asyncio.sleep(2)
+            stars_order = [5, 4, 3, 2, 1]
+            bar_els = await page.query_selector_all(".a-meter-bar")
+            for i, bar in enumerate(bar_els[:5]):
+                style = await bar.get_attribute("style") or ""
+                m = _re.search(r"width\s*:\s*(\d+\.?\d*)%", style)
+                if m:
+                    try:
+                        histogram[str(stars_order[i])] = float(m.group(1))
+                    except ValueError:
+                        pass
 
-                # Histogram percentages: #histogramTable rows[0]=5★ ... rows[4]=1★
-                stars_order = [5, 4, 3, 2, 1]
-                rows = await page.query_selector_all("#histogramTable tr")
-                for i, row in enumerate(rows[:5]):
-                    tds = await row.query_selector_all("td")
-                    if tds:
+            # ── Reviews: scroll product page to trigger lazy-load ───────────────
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.75)")
+            await asyncio.sleep(2)
+
+            review_els = await page.query_selector_all("[data-hook='review']")
+            for el in review_els[:20]:
+                try:
+                    stars = 0
+                    star_el = await el.query_selector(
+                        "[data-hook='review-star-rating'] .a-icon-alt, "
+                        "[data-hook='review-star-rating-view'] .a-icon-alt, "
+                        "[data-hook='cmps-review-star-rating'] .a-icon-alt"
+                    )
+                    if star_el:
                         try:
-                            text = await tds[-1].inner_text()
-                            histogram[str(stars_order[i])] = float(
-                                text.strip().replace("%", "").strip()
-                            )
+                            stars = int(float((await star_el.text_content()).split()[0]))
                         except (ValueError, IndexError):
                             pass
 
-                # Reviews (up to 20)
-                review_els = await page.query_selector_all("[data-hook='review']")
-                for el in review_els[:20]:
-                    try:
-                        stars = 0
-                        star_el = await el.query_selector(
-                            "[data-hook='review-star-rating'] .a-icon-alt"
-                        )
-                        if star_el:
-                            stars = int(float((await star_el.inner_text()).split()[0]))
+                    author_el = await el.query_selector(".a-profile-name")
+                    author = (await author_el.inner_text()).strip() if author_el else ""
 
-                        author_el = await el.query_selector(".a-profile-name")
-                        author = (await author_el.inner_text()).strip() if author_el else ""
+                    title_el_r = await el.query_selector(
+                        "[data-hook='review-title'] span:not(.a-icon-alt)"
+                    )
+                    review_title = (
+                        (await title_el_r.inner_text()).strip() if title_el_r else ""
+                    )
 
-                        title_el_r = await el.query_selector(
-                            "[data-hook='review-title'] span:not(.a-icon-alt)"
-                        )
-                        review_title = (
-                            (await title_el_r.inner_text()).strip() if title_el_r else ""
-                        )
+                    body_el = await el.query_selector("[data-hook='review-body'] span")
+                    body = (await body_el.inner_text()).strip() if body_el else ""
 
-                        body_el = await el.query_selector("[data-hook='review-body'] span")
-                        body = (await body_el.inner_text()).strip() if body_el else ""
-
-                        reviews.append(
-                            {"stars": stars, "author": author, "title": review_title, "body": body}
-                        )
-                    except Exception:
-                        continue
+                    reviews.append(
+                        {"stars": stars, "author": author, "title": review_title, "body": body}
+                    )
+                except Exception:
+                    continue
 
             return {
                 "asin": asin,
@@ -356,5 +389,31 @@ async def scrape_product_details(url: str) -> dict:
                 "histogram": histogram,
                 "reviews": reviews,
             }
+        finally:
+            await browser.close()
+
+
+async def scrape_preview_images(query: str, max_images: int = 4) -> list[str]:
+    """
+    Fetch preview image URLs via Bing Images using headless Chromium.
+    Returns up to max_images HTTPS URLs. Best-effort; returns [] on failure.
+    """
+    encoded = query.replace(" ", "+")
+    url = f"https://www.bing.com/images/search?q={encoded}&form=HDRSC2"
+    async with async_playwright() as playwright:
+        browser, page = await _get_page(playwright)
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            await asyncio.sleep(2)
+            # Bing renders thumbnails as .mimg elements with src set directly
+            images: list[str] = await page.evaluate("""
+                () => Array.from(document.querySelectorAll('img.mimg'))
+                    .map(img => img.src)
+                    .filter(src => src && src.startsWith('https://'))
+                    .slice(0, 4)
+            """)
+            return images[:max_images]
+        except Exception:
+            return []
         finally:
             await browser.close()
