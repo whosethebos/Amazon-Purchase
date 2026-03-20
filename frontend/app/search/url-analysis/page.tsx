@@ -2,9 +2,95 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { analyzeUrl } from "@/lib/api";
-import type { AnalyzeUrlResponse, Histogram, Review } from "@/lib/types";
+import { analyzeUrl, fetchSimilarProducts } from "@/lib/api";
+import type { AnalyzeUrlResponse, Histogram, Review, SimilarProduct } from "@/lib/types";
 import { useBaymax } from "@/components/BaymaxContext";
+
+// ─── ScoreCard ─────────────────────────────────────────────────────────────────
+
+function ScoreCard({ score }: { score: number | null }) {
+  if (score === null || score < 1 || score > 10) return null;
+
+  const color =
+    score >= 7 ? "text-emerald-400" : score >= 4 ? "text-yellow-400" : "text-red-400";
+  const label =
+    score >= 7 ? "Good buy" : score >= 4 ? "Mixed bag" : "Avoid";
+
+  return (
+    <div className="bg-[#0f0f1a] border border-[#2a2a45] rounded-xl p-5 flex items-center gap-5">
+      <div className={`text-5xl font-bold tabular-nums ${color}`}>
+        {score}<span className="text-2xl text-[#9898b8] font-normal">/10</span>
+      </div>
+      <div>
+        <p className={`text-lg font-semibold ${color}`}>{label}</p>
+        <p className="text-[#9898b8] text-xs mt-0.5">Overall score based on reviews & analysis</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── SimilarProductCard ────────────────────────────────────────────────────────
+
+function SimilarProductCard({ product }: { product: SimilarProduct }) {
+  return (
+    <a
+      href={product.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block bg-[#0f0f1a] border border-[#2a2a45] rounded-xl p-4 hover:border-[#818cf8] transition-colors"
+    >
+      <div className="flex gap-3 items-start">
+        {product.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.image_url}
+            alt={product.title}
+            width={64}
+            height={64}
+            className="object-contain rounded-lg shrink-0 w-16 h-16"
+          />
+        ) : (
+          <div className="w-16 h-16 bg-[#1a1a2e] rounded-lg shrink-0" />
+        )}
+        <div className="min-w-0 space-y-1">
+          <p className="text-[#ebebf5] text-sm font-medium line-clamp-2 leading-snug">
+            {product.title}
+          </p>
+          {product.price != null && (
+            <p className="text-[#f97316] font-bold text-sm">
+              {product.currency ?? "USD"} {product.price.toFixed(2)}
+            </p>
+          )}
+          {product.rating != null && (
+            <p className="text-[#9898b8] text-xs">
+              ★ {product.rating.toFixed(1)}
+              {product.review_count != null && (
+                <span> ({product.review_count.toLocaleString()})</span>
+              )}
+            </p>
+          )}
+        </div>
+      </div>
+    </a>
+  );
+}
+
+// ─── SimilarProductSkeleton ────────────────────────────────────────────────────
+
+function SimilarProductSkeleton() {
+  return (
+    <div className="bg-[#0f0f1a] border border-[#2a2a45] rounded-xl p-4 animate-pulse">
+      <div className="flex gap-3 items-start">
+        <div className="w-16 h-16 bg-[#1a1a2e] rounded-lg shrink-0" />
+        <div className="flex-1 space-y-2 pt-1">
+          <div className="h-3 bg-[#1a1a2e] rounded w-full" />
+          <div className="h-3 bg-[#1a1a2e] rounded w-3/4" />
+          <div className="h-3 bg-[#1a1a2e] rounded w-1/2" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── ReviewCard ────────────────────────────────────────────────────────────────
 
@@ -73,6 +159,7 @@ function UrlAnalysisContent() {
   const [error, setError] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [modelElapsed, setModelElapsed] = useState(0);
+  const [similarProducts, setSimilarProducts] = useState<SimilarProduct[] | null>(null);
   const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -136,6 +223,13 @@ function UrlAnalysisContent() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedUrl]);
+
+  useEffect(() => {
+    if (!data) return;
+    fetchSimilarProducts(data.product.asin, data.product.title)
+      .then(setSimilarProducts)
+      .catch(() => setSimilarProducts([]));
+  }, [data]);
 
   // ── Loading ──
   if (!data && !error) {
@@ -214,6 +308,9 @@ function UrlAnalysisContent() {
         <Link href="/" className="text-[#818cf8] text-sm hover:text-indigo-300 transition-colors">
           ← New Search
         </Link>
+
+        {/* Score */}
+        <ScoreCard score={analysis.score} />
 
         {/* Section A — Product Header */}
         <div className="flex gap-4 items-start bg-[#0f0f1a] border border-[#2a2a45] rounded-xl p-5">
@@ -310,6 +407,19 @@ function UrlAnalysisContent() {
             {featuredReviews.map((review, i) => (
               <ReviewCard key={i} review={review} />
             ))}
+          </div>
+        )}
+
+        {/* Section E — Similar Products */}
+        {(similarProducts === null || similarProducts.length > 0) && (
+          <div>
+            <h2 className="text-[#ebebf5] font-semibold mb-3">Similar Products</h2>
+            <div className="grid grid-cols-1 gap-3">
+              {similarProducts === null
+                ? Array.from({ length: 4 }).map((_, i) => <SimilarProductSkeleton key={i} />)
+                : similarProducts.map((p) => <SimilarProductCard key={p.asin} product={p} />)
+              }
+            </div>
           </div>
         )}
 
