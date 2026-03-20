@@ -1,6 +1,6 @@
 # backend/tests/test_analyze_url.py
 import pytest
-from scraper.amazon import _sort_products_by_rating, _extract_asin
+from scraper.amazon import _sort_products_by_rating, extract_asin as _extract_asin
 
 
 # ── _sort_products_by_rating ────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ from llm.analyze import run_llm_analysis, _LLM_FALLBACK
 async def test_run_llm_analysis_fallback_on_exception():
     """When chat_json raises, run_llm_analysis returns the empty fallback."""
     with patch("llm.analyze.chat_json", new=AsyncMock(side_effect=Exception("LLM down"))):
-        result = await run_llm_analysis("Test Product", [])
+        result = await run_llm_analysis("Test Product", [], histogram={"5": 0.0, "4": 0.0, "3": 0.0, "2": 0.0, "1": 0.0}, review_count=None)
     assert result == _LLM_FALLBACK
 
 
@@ -67,5 +67,17 @@ async def test_run_llm_analysis_fallback_on_json_decode_error():
     """When chat_json raises JSONDecodeError, run_llm_analysis returns fallback."""
     import json
     with patch("llm.analyze.chat_json", new=AsyncMock(side_effect=json.JSONDecodeError("bad", "", 0))):
-        result = await run_llm_analysis("Test Product", [{"stars": 5, "title": "Good", "body": "Nice"}])
+        result = await run_llm_analysis("Test Product", [{"stars": 5, "title": "Good", "body": "Nice"}], histogram={"5": 100.0, "4": 0.0, "3": 0.0, "2": 0.0, "1": 0.0}, review_count=1)
     assert result == _LLM_FALLBACK
+
+
+async def test_run_llm_analysis_fallback_contains_score():
+    """Fallback dict must include a 'score' key (value None) after signature change."""
+    with patch("llm.analyze.chat_json", new=AsyncMock(side_effect=Exception("down"))):
+        result = await run_llm_analysis(
+            "Test Product", [],
+            histogram={"5": 0.0, "4": 0.0, "3": 0.0, "2": 0.0, "1": 0.0},
+            review_count=None,
+        )
+    assert "score" in result
+    assert result["score"] is None
