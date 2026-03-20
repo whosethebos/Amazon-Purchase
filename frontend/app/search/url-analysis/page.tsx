@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { analyzeUrl } from "@/lib/api";
@@ -71,6 +71,20 @@ function UrlAnalysisContent() {
 
   const [data, setData] = useState<AnalyzeUrlResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stepIndex, setStepIndex] = useState(0);
+  const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const STEPS = [
+    { label: "Resolving URL", detail: "Following redirects to get full product link" },
+    { label: "Launching browser", detail: "Starting headless Chromium" },
+    { label: "Loading product page", detail: "Fetching Amazon product page" },
+    { label: "Reading product details", detail: "Extracting title, price, rating & images" },
+    { label: "Loading reviews", detail: "Scrolling page to load customer reviews" },
+    { label: "Running AI analysis", detail: "Analyzing pros, cons & sentiment with local AI model" },
+  ];
+
+  // Advance steps on a schedule that roughly mirrors real backend timing
+  const STEP_DELAYS = [0, 1500, 4000, 9000, 12000, 16000];
 
   useEffect(() => {
     if (!resolvedUrl) {
@@ -80,6 +94,12 @@ function UrlAnalysisContent() {
 
     const controller = new AbortController();
 
+    // Schedule step advances
+    STEP_DELAYS.forEach((delay, i) => {
+      const t = setTimeout(() => setStepIndex(i), delay);
+      stepTimers.current.push(t);
+    });
+
     analyzeUrl(resolvedUrl, controller.signal)
       .then(setData)
       .catch((err: unknown) => {
@@ -87,16 +107,55 @@ function UrlAnalysisContent() {
         setError(err instanceof Error ? err.message : "Analysis failed");
       });
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      stepTimers.current.forEach(clearTimeout);
+      stepTimers.current = [];
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedUrl]);
 
   // ── Loading ──
   if (!data && !error) {
     return (
-      <main className="min-h-screen bg-[#07070d] flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-[#9898b8] text-sm">Analyzing product…</p>
+      <main className="min-h-screen bg-[#07070d] flex items-center justify-center px-4">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center">
+            <div className="w-10 h-10 border-2 border-[#f97316] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-[#ebebf5] font-semibold text-sm">Analyzing product</p>
+          </div>
+          <div className="space-y-2">
+            {STEPS.map((step, i) => {
+              const done = i < stepIndex;
+              const active = i === stepIndex;
+              return (
+                <div
+                  key={i}
+                  className={`flex items-start gap-3 rounded-lg px-3 py-2 transition-all duration-300 ${
+                    active ? "bg-[#1a1a2e] border border-[#2a2a45]" : ""
+                  }`}
+                >
+                  <div className="mt-0.5 shrink-0">
+                    {done ? (
+                      <span className="text-emerald-400 text-sm">✓</span>
+                    ) : active ? (
+                      <div className="w-3.5 h-3.5 border border-[#f97316] border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <div className="w-3.5 h-3.5 rounded-full border border-[#2a2a45]" />
+                    )}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-medium ${done ? "text-[#9898b8]" : active ? "text-[#ebebf5]" : "text-[#3a3a5a]"}`}>
+                      {step.label}
+                    </p>
+                    {active && (
+                      <p className="text-xs text-[#9898b8] mt-0.5">{step.detail}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </main>
     );
