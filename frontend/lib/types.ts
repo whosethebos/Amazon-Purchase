@@ -24,6 +24,18 @@ export interface ReviewAnalysis {
   pros: string[];
   cons: string[];
   featured_review_indices: number[];
+  score: number | null;
+}
+
+export interface SimilarProduct {
+  asin: string;
+  title: string;
+  price: number | null;
+  currency: string | null;
+  rating: number | null;
+  review_count: number | null;
+  image_url: string | null;
+  url: string;
 }
 
 export interface Review {

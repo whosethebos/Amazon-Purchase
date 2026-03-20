@@ -1,6 +1,6 @@
 // frontend/lib/api.ts
 import { API_URL } from "./config";
-import type { AnalyzeUrlResponse } from "./types";
+import type { AnalyzeUrlResponse, SimilarProduct } from "./types";
 
 export async function startSearch(query: string, maxResults = 10): Promise<{ search_id: string }> {
   const res = await fetch(`${API_URL}/api/search`, {
@@ -70,6 +70,19 @@ export async function getPreviewImages(q: string): Promise<{ images: string[] }>
     return res.json();
   } catch {
     return { images: [] };
+  }
+}
+
+export async function fetchSimilarProducts(asin: string, title: string): Promise<SimilarProduct[]> {
+  try {
+    const res = await fetch(
+      `${API_URL}/api/similar-products?asin=${encodeURIComponent(asin)}&title=${encodeURIComponent(title)}`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.products ?? [];
+  } catch {
+    return [];
   }
 }
 
