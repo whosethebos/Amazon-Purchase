@@ -73,6 +73,18 @@ export async function getPreviewImages(q: string): Promise<{ images: string[] }>
   }
 }
 
+export async function addToWatchlistFromUrl(product: {
+  asin: string; title: string; price: number | null; currency: string | null;
+  rating: number | null; review_count: number | null; image_url: string | null; url: string;
+}): Promise<void> {
+  const res = await fetch(`${API_URL}/api/watchlist/from-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(product),
+  });
+  if (!res.ok) throw new Error("Failed to add to watchlist");
+}
+
 export async function fetchSimilarProducts(asin: string, title: string): Promise<SimilarProduct[]> {
   try {
     const res = await fetch(

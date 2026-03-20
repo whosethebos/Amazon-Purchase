@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { analyzeUrl, fetchSimilarProducts } from "@/lib/api";
+import { analyzeUrl, fetchSimilarProducts, addToWatchlistFromUrl } from "@/lib/api";
 import type { AnalyzeUrlResponse, Histogram, Review, SimilarProduct } from "@/lib/types";
 import { useBaymax } from "@/components/BaymaxContext";
 
@@ -160,6 +160,7 @@ function UrlAnalysisContent() {
   const [stepIndex, setStepIndex] = useState(0);
   const [modelElapsed, setModelElapsed] = useState(0);
   const [similarProducts, setSimilarProducts] = useState<SimilarProduct[] | null>(null);
+  const [watchlistStatus, setWatchlistStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -304,10 +305,42 @@ function UrlAnalysisContent() {
     <main className="min-h-screen bg-[#07070d]">
       <div className="max-w-2xl mx-auto px-4 py-10 space-y-8">
 
-        {/* Back link */}
-        <Link href="/" className="text-[#818cf8] text-sm hover:text-indigo-300 transition-colors">
-          ← New Search
-        </Link>
+        {/* Back link + Watchlist button */}
+        <div className="flex items-center justify-between">
+          <Link href="/" className="text-[#818cf8] text-sm hover:text-indigo-300 transition-colors">
+            ← Home
+          </Link>
+          <button
+            onClick={() => {
+              if (watchlistStatus !== "idle") return;
+              setWatchlistStatus("loading");
+              addToWatchlistFromUrl({
+                asin: product.asin,
+                title: product.title,
+                price: product.price,
+                currency: product.currency,
+                rating: product.rating,
+                review_count: product.review_count,
+                image_url: product.image_url,
+                url: resolvedUrl!,
+              })
+                .then(() => setWatchlistStatus("done"))
+                .catch(() => setWatchlistStatus("error"));
+            }}
+            disabled={watchlistStatus !== "idle"}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+              watchlistStatus === "done"
+                ? "border-emerald-500 text-emerald-400 cursor-default"
+                : watchlistStatus === "error"
+                ? "border-red-500 text-red-400 cursor-default"
+                : watchlistStatus === "loading"
+                ? "border-[#2a2a45] text-[#9898b8] cursor-wait"
+                : "border-[#2a2a45] text-[#9898b8] hover:border-[#818cf8] hover:text-[#818cf8]"
+            }`}
+          >
+            {watchlistStatus === "done" ? "✓ Watchlisted" : watchlistStatus === "error" ? "Error" : watchlistStatus === "loading" ? "Adding…" : "+ Add to Watchlist"}
+          </button>
+        </div>
 
         {/* Score */}
         <ScoreCard score={analysis.score} />

@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from models import SearchRequest, ConfirmationRequest, AnalyzeUrlRequest
 from agents.orchestrator import OrchestratorAgent
 import db.supabase_client as db
+from db.supabase_client import find_or_create_product_by_asin
 from scraper.amazon import scrape_current_price, scrape_product_details, scrape_preview_images, extract_asin, search_products
 from config import settings
 from llm.analyze import run_llm_analysis
@@ -192,6 +193,26 @@ async def add_to_watchlist(body: dict):
     if not product_id:
         raise HTTPException(400, "product_id required")
     item = db.add_to_watchlist(str(product_id))
+    return item
+
+
+@app.post("/api/watchlist/from-url")
+async def add_to_watchlist_from_url(body: dict):
+    """Add a URL-analyzed product to the watchlist, creating the product record if needed."""
+    asin = body.get("asin")
+    if not asin:
+        raise HTTPException(400, "asin required")
+    product_record = find_or_create_product_by_asin({
+        "asin": asin,
+        "title": body.get("title"),
+        "price": body.get("price"),
+        "currency": body.get("currency"),
+        "rating": body.get("rating"),
+        "review_count": body.get("review_count"),
+        "image_url": body.get("image_url"),
+        "url": body.get("url"),
+    })
+    item = db.add_to_watchlist(str(product_record["id"]))
     return item
 
 

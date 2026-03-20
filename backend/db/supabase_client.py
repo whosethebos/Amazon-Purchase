@@ -106,6 +106,16 @@ def get_analysis_by_product(product_id: str) -> dict | None:
     return result.data[0] if result.data else None
 
 
+def find_or_create_product_by_asin(product: dict) -> dict:
+    """Find an existing product by ASIN or create a new standalone one (no search_id)."""
+    client = get_client()
+    existing = client.table("products").select("*").eq("asin", product["asin"]).limit(1).execute()
+    if existing.data:
+        return existing.data[0]
+    result = client.table("products").insert({**product, "confirmed": True}).execute()
+    return result.data[0]
+
+
 # --- Watchlist ---
 
 def add_to_watchlist(product_id: str) -> dict:
