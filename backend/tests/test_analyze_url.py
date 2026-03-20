@@ -123,3 +123,74 @@ def test_validate_score_bool_true():
 
 def test_validate_score_bool_false():
     assert _validate_score(False) is None
+
+
+from httpx import AsyncClient, ASGITransport
+from main import app
+
+
+# ── /api/similar-products ───────────────────────────────────────────────────────
+
+@pytest.fixture
+def mock_search_results():
+    return [
+        {"asin": "B001", "title": "Similar Product One", "price": 29.99, "currency": "USD",
+         "rating": 4.5, "review_count": 500, "image_url": "https://img.example.com/1.jpg",
+         "url": "https://www.amazon.com/dp/B001"},
+        {"asin": "B002", "title": "Similar Product Two", "price": 19.99, "currency": "USD",
+         "rating": 4.2, "review_count": 200, "image_url": None,
+         "url": "https://www.amazon.com/dp/B002"},
+        {"asin": "SOURCE", "title": "Source Product (should be filtered)", "price": 49.99,
+         "currency": "USD", "rating": 4.0, "review_count": 100, "image_url": None,
+         "url": "https://www.amazon.com/dp/SOURCE"},
+        {"asin": "B003", "title": "Similar Product Three", "price": 39.99, "currency": "USD",
+         "rating": 3.8, "review_count": 80, "image_url": None,
+         "url": "https://www.amazon.com/dp/B003"},
+        {"asin": "B004", "title": "Similar Product Four", "price": 24.99, "currency": "USD",
+         "rating": 4.1, "review_count": 150, "image_url": None,
+         "url": "https://www.amazon.com/dp/B004"},
+    ]
+
+
+async def test_similar_products_filters_source_asin(mock_search_results):
+    with patch("main.search_products", new=AsyncMock(return_value=mock_search_results)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/similar-products?asin=SOURCE&title=Some+Product+Name")
+    assert resp.status_code == 200
+    asins = [p["asin"] for p in resp.json()["products"]]
+    assert "SOURCE" not in asins
+
+
+async def test_similar_products_returns_at_most_4(mock_search_results):
+    with patch("main.search_products", new=AsyncMock(return_value=mock_search_results)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/similar-products?asin=SOURCE&title=Some+Product+Name")
+    assert len(resp.json()["products"]) <= 4
+
+
+async def test_similar_products_empty_title_returns_empty():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.get("/api/similar-products?asin=SOURCE&title=   ")
+    assert resp.status_code == 200
+    assert resp.json() == {"products": []}
+
+
+async def test_similar_products_scraper_error_returns_empty():
+    with patch("main.search_products", new=AsyncMock(side_effect=Exception("scrape failed"))):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/api/similar-products?asin=SOURCE&title=Some+Product")
+    assert resp.status_code == 200
+    assert resp.json() == {"products": []}
+
+
+async def test_similar_products_uses_first_6_words_of_title():
+    """search_products should be called with a query of max 6 words."""
+    long_title = "One Two Three Four Five Six Seven Eight Nine Ten extra words here"
+    captured = {}
+    async def mock_search(query, max_results):
+        captured["query"] = query
+        return []
+    with patch("main.search_products", new=AsyncMock(side_effect=mock_search)):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.get(f"/api/similar-products?asin=B0XX&title={long_title.replace(' ', '+')}")
+    assert len(captured["query"].split()) == 6

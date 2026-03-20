@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from models import SearchRequest, ConfirmationRequest, AnalyzeUrlRequest
 from agents.orchestrator import OrchestratorAgent
 import db.supabase_client as db
-from scraper.amazon import scrape_current_price, scrape_product_details, scrape_preview_images, extract_asin
+from scraper.amazon import scrape_current_price, scrape_product_details, scrape_preview_images, extract_asin, search_products
 from config import settings
 from llm.analyze import run_llm_analysis
 
@@ -128,6 +128,20 @@ async def get_preview_images(q: str):
     """Fetch up to 4 web image URLs for a query via DuckDuckGo (best-effort)."""
     images = await scrape_preview_images(q)
     return {"images": images}
+
+
+@app.get("/api/similar-products")
+async def get_similar_products(asin: str, title: str):
+    """Find similar Amazon products by searching with the product title."""
+    try:
+        if not title.strip():
+            return {"products": []}
+        query = " ".join(title.split()[:6])
+        results = await search_products(query, max_results=8)
+        filtered = [p for p in results if p.get("asin") != asin]
+        return {"products": filtered[:4]}
+    except Exception:
+        return {"products": []}
 
 
 @app.get("/api/searches")
