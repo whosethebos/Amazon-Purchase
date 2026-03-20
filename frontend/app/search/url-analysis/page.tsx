@@ -72,7 +72,9 @@ function UrlAnalysisContent() {
   const [data, setData] = useState<AnalyzeUrlResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
+  const [modelElapsed, setModelElapsed] = useState(0);
   const stepTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const elapsedTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const STEPS = [
     { label: "Resolving URL", detail: "Following redirects to get full product link" },
@@ -80,11 +82,27 @@ function UrlAnalysisContent() {
     { label: "Loading product page", detail: "Fetching Amazon product page" },
     { label: "Reading product details", detail: "Extracting title, price, rating & images" },
     { label: "Loading reviews", detail: "Scrolling page to load customer reviews" },
-    { label: "Running AI analysis", detail: "Analyzing pros, cons & sentiment with local AI model" },
+    { label: "Formatting review data", detail: "Building prompt from scraped reviews" },
+    { label: "Querying AI model (qwen3:14b)", detail: null },  // elapsed counter shown here
   ];
 
   // Advance steps on a schedule that roughly mirrors real backend timing
-  const STEP_DELAYS = [0, 1500, 4000, 9000, 12000, 16000];
+  const STEP_DELAYS = [0, 1500, 4000, 9000, 12000, 16000, 16800];
+
+  // Start elapsed counter when AI model query step becomes active
+  const AI_MODEL_STEP = 6;
+
+  useEffect(() => {
+    if (stepIndex === AI_MODEL_STEP) {
+      setModelElapsed(0);
+      elapsedTimer.current = setInterval(() => {
+        setModelElapsed((s) => s + 1);
+      }, 1000);
+    } else if (elapsedTimer.current) {
+      clearInterval(elapsedTimer.current);
+      elapsedTimer.current = null;
+    }
+  }, [stepIndex]);
 
   useEffect(() => {
     if (!resolvedUrl) {
@@ -111,6 +129,10 @@ function UrlAnalysisContent() {
       controller.abort();
       stepTimers.current.forEach(clearTimeout);
       stepTimers.current = [];
+      if (elapsedTimer.current) {
+        clearInterval(elapsedTimer.current);
+        elapsedTimer.current = null;
+      }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedUrl]);
@@ -149,7 +171,11 @@ function UrlAnalysisContent() {
                       {step.label}
                     </p>
                     {active && (
-                      <p className="text-xs text-[#9898b8] mt-0.5">{step.detail}</p>
+                      <p className="text-xs text-[#9898b8] mt-0.5">
+                        {i === AI_MODEL_STEP
+                          ? `Waiting for response… ${modelElapsed}s`
+                          : step.detail}
+                      </p>
                     )}
                   </div>
                 </div>
