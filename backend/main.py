@@ -12,6 +12,24 @@ from scraper.amazon import scrape_current_price, scrape_product_details, scrape_
 from config import settings
 from llm.analyze import run_llm_analysis
 
+def _validate_score(raw) -> int | None:
+    """Coerce LLM-returned score to int 1–10, or None if invalid."""
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, float):
+        raw = round(raw)
+    elif isinstance(raw, str):
+        try:
+            raw = int(raw)
+        except ValueError:
+            return None
+    if isinstance(raw, int) and 1 <= raw <= 10:
+        return raw
+    return None
+
+
 app = FastAPI(title="Amazon Research Tool")
 
 app.add_middleware(
@@ -208,7 +226,13 @@ async def analyze_url(req: AnalyzeUrlRequest):
 
             product_data = await scrape_product_details(url)
             reviews = product_data["reviews"]
-            analysis = await run_llm_analysis(product_data["title"], reviews)
+            analysis = await run_llm_analysis(
+                product_data["title"],
+                reviews,
+                histogram=product_data["histogram"],
+                review_count=product_data["review_count"],
+            )
+            analysis["score"] = _validate_score(analysis.get("score"))
 
             valid_indices = [
                 i for i in analysis.get("featured_review_indices", [])

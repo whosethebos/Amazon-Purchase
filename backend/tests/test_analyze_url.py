@@ -81,3 +81,45 @@ async def test_run_llm_analysis_fallback_contains_score():
         )
     assert "score" in result
     assert result["score"] is None
+
+
+from main import _validate_score
+
+
+# ── _validate_score ─────────────────────────────────────────────────────────────
+
+def test_validate_score_none():
+    assert _validate_score(None) is None
+
+def test_validate_score_valid_int():
+    assert _validate_score(7) == 7
+
+def test_validate_score_boundary_1():
+    assert _validate_score(1) == 1
+
+def test_validate_score_boundary_10():
+    assert _validate_score(10) == 10
+
+def test_validate_score_out_of_range_low():
+    assert _validate_score(0) is None
+
+def test_validate_score_out_of_range_high():
+    assert _validate_score(11) is None
+
+def test_validate_score_float_rounds_to_valid():
+    assert _validate_score(7.6) == 8
+
+def test_validate_score_float_rounds_to_invalid():
+    assert _validate_score(0.4) is None  # rounds to 0, out of range
+
+def test_validate_score_string_valid():
+    assert _validate_score("7") == 7
+
+def test_validate_score_string_invalid():
+    assert _validate_score("good") is None
+
+def test_validate_score_bool_true():
+    assert _validate_score(True) is None  # bool is subclass of int; must reject
+
+def test_validate_score_bool_false():
+    assert _validate_score(False) is None
