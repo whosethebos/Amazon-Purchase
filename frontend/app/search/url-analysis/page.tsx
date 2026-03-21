@@ -171,7 +171,7 @@ function UrlAnalysisContent() {
     { label: "Reading product details", detail: "Extracting title, price, rating & images" },
     { label: "Loading reviews", detail: "Scrolling page to load customer reviews" },
     { label: "Formatting review data", detail: "Building prompt from scraped reviews" },
-    { label: "Querying AI model (qwen3:14b)", detail: null },  // elapsed counter shown here
+    { label: "Querying AI model (deepseek-r1:latest)", detail: null },  // elapsed counter shown here
   ];
 
   // Advance steps on a schedule that roughly mirrors real backend timing

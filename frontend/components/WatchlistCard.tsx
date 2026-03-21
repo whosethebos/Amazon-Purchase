@@ -8,6 +8,8 @@ type WatchlistItem = {
   product: {
     title: string;
     url: string;
+    asin: string | null;
+    currency: string | null;
     image_url: string | null;
   };
   current_price: number | null;
@@ -41,10 +43,8 @@ export function WatchlistCard({ item, onDelete, onRefresh, isRefreshingAll }: Pr
       ? current_price - previous_price
       : null;
 
-  const asin = product.url.match(/\/dp\/([A-Z0-9]{10})/)?.[1];
-  const priceHistoryUrl = asin
-    ? `https://camelcamelcamel.com/product/${asin}`
-    : `https://camelcamelcamel.com/search?sq=${encodeURIComponent(product.url)}`;
+  const asin = product.asin || product.url.match(/\/dp\/([A-Z0-9]{10})/)?.[1];
+  const priceHistoryUrl = asin ? `https://camelcamelcamel.com/product/${asin}` : undefined;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -82,7 +82,7 @@ export function WatchlistCard({ item, onDelete, onRefresh, isRefreshingAll }: Pr
           {/* Price row */}
           <div className="flex items-center gap-2">
             <span className="text-[18px] font-bold text-white tabular-nums">
-              {current_price != null ? `$${current_price.toFixed(2)}` : "—"}
+              {current_price != null ? `${product.currency ?? "USD"} ${current_price.toFixed(2)}` : "—"}
             </span>
             {priceDiff != null && priceDiff !== 0 && (
               <span
@@ -101,14 +101,16 @@ export function WatchlistCard({ item, onDelete, onRefresh, isRefreshingAll }: Pr
 
           {/* Meta row */}
           <div className="flex items-center gap-3 mt-1">
-            <a
-              href={priceHistoryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-[#f97316] hover:text-[#fb923c]"
-            >
-              ↗ price history
-            </a>
+            {priceHistoryUrl && (
+              <a
+                href={priceHistoryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] text-[#f97316] hover:text-[#fb923c]"
+              >
+                ↗ price history
+              </a>
+            )}
             <span className="text-[10px] text-[#2e2e50]">
               {formatLastChecked(last_checked_at)}
             </span>
