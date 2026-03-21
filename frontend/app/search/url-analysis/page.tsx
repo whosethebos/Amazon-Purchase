@@ -376,7 +376,16 @@ function UrlAnalysisContent() {
             )}
             {asin && (
               <a
-                href={`https://camelcamelcamel.com/product/${asin}`}
+                href={`https://keepa.com/#!product/${
+                  resolvedUrl?.includes("amazon.in") ? 10 :
+                  resolvedUrl?.includes("amazon.co.uk") ? 2 :
+                  resolvedUrl?.includes("amazon.de") ? 3 :
+                  resolvedUrl?.includes("amazon.fr") ? 4 :
+                  resolvedUrl?.includes("amazon.ca") ? 6 :
+                  resolvedUrl?.includes("amazon.it") ? 8 :
+                  resolvedUrl?.includes("amazon.es") ? 9 :
+                  resolvedUrl?.includes("amazon.com.au") ? 12 : 1
+                }-${asin}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#818cf8] text-xs underline hover:text-indigo-300"

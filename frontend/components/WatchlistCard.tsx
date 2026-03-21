@@ -44,7 +44,16 @@ export function WatchlistCard({ item, onDelete, onRefresh, isRefreshingAll }: Pr
       : null;
 
   const asin = product.asin || product.url.match(/\/dp\/([A-Z0-9]{10})/)?.[1];
-  const priceHistoryUrl = asin ? `https://camelcamelcamel.com/product/${asin}` : undefined;
+  const keepaMarketplace =
+    product.url.includes("amazon.in") ? 10 :
+    product.url.includes("amazon.co.uk") ? 2 :
+    product.url.includes("amazon.de") ? 3 :
+    product.url.includes("amazon.fr") ? 4 :
+    product.url.includes("amazon.ca") ? 6 :
+    product.url.includes("amazon.it") ? 8 :
+    product.url.includes("amazon.es") ? 9 :
+    product.url.includes("amazon.com.au") ? 12 : 1;
+  const priceHistoryUrl = asin ? `https://keepa.com/#!product/${keepaMarketplace}-${asin}` : undefined;
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
