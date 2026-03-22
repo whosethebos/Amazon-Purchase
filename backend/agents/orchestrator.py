@@ -22,9 +22,10 @@ class OrchestratorAgent:
     To add a new agent step, add it between phases below and emit an SSE status event.
     """
 
-    def __init__(self, search_id: str, query: str):
+    def __init__(self, search_id: str, query: str, requirements: list[str] | None = None):
         self.search_id = search_id
         self.query = query
+        self.requirements = requirements or []
         self.scraper = ScraperAgent()
         self.confirmation = ConfirmationAgent()
         self.analyst = ReviewAnalystAgent()
@@ -52,7 +53,10 @@ class OrchestratorAgent:
         # --- Phase 1: Scrape product batches until user confirms ---
         offset = 0
         while True:
-            products = await self.scraper.fetch_batch(self.query, offset=offset)
+            search_query = self.query
+            if self.requirements:
+                search_query = f"{self.query} {' '.join(self.requirements)}"
+            products = await self.scraper.fetch_batch(search_query, offset=offset)
             if not products:
                 yield {"event": "error", "data": {"message": "No products found. Try a different search."}}
                 db.update_search_status(self.search_id, "failed")
@@ -115,7 +119,7 @@ class OrchestratorAgent:
         for product in confirmed_products:
             yield {"event": "status", "data": {"message": f"Analyzing: {product['title'][:50]}..."}}
             reviews = db.get_reviews_by_product(product["id"])
-            analysis = await self.analyst.analyze(product["title"], reviews)
+            analysis = await self.analyst.analyze(product["title"], reviews, self.requirements)
             analyses[product["asin"]] = analysis
             db.insert_analysis({**analysis, "product_id": product["id"]})
             yield {
@@ -125,7 +129,7 @@ class OrchestratorAgent:
 
         # --- Phase 4: Rank products ---
         yield {"event": "status", "data": {"message": "Ranking products...", "status": "ranking"}}
-        ranked = await self.ranker.rank(confirmed_products, analyses)
+        ranked = await self.ranker.rank(confirmed_products, analyses, self.requirements)
 
         # Update scores/ranks in the analysis table
         client = db.get_client()

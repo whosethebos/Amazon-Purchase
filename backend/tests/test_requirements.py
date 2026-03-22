@@ -37,3 +37,21 @@ def test_create_search_requirements_defaults_to_empty():
         result = create_search("desk", 10)
     insert_call = mock_client.table.return_value.insert.call_args[0][0]
     assert insert_call["requirements"] == []
+
+
+from agents.orchestrator import OrchestratorAgent
+
+
+def test_orchestrator_stores_requirements():
+    orch = OrchestratorAgent("sid1", "desk", ["60 inch", "solid wood"])
+    assert orch.requirements == ["60 inch", "solid wood"]
+
+
+def test_orchestrator_requirements_defaults_to_empty():
+    orch = OrchestratorAgent("sid1", "desk")
+    assert orch.requirements == []
+
+
+def test_orchestrator_requirements_none_becomes_empty():
+    orch = OrchestratorAgent("sid1", "desk", None)
+    assert orch.requirements == []
