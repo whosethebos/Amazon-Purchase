@@ -18,6 +18,7 @@ function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get("q") ?? "";
+  const initialRequirements = searchParams.getAll("req");
   const [watchlist, setWatchlist] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
@@ -41,7 +42,7 @@ function HomeContent() {
   const AMAZON_ASIN_RE = /^https?:\/\/(www\.)?amazon\.\w+(\.\w+)?\/(dp|gp\/product)\/([A-Z0-9]{10})/;
   const AMAZON_URL_RE = /^https?:\/\/(www\.)?amazon\.|^https?:\/\/amzn\./i;
 
-  const handleSearch = (query: string) => {
+  const handleSearch = (query: string, requirements: string[]) => {
     const trimmed = query.trim();
     const asinMatch = trimmed.match(AMAZON_ASIN_RE);
     if (asinMatch) {
@@ -53,7 +54,8 @@ function HomeContent() {
       router.push(`/search/url-analysis?url=${encodeURIComponent(trimmed)}`);
       return;
     }
-    router.push(`/search/preview?q=${encodeURIComponent(query)}`);
+    const reqParams = requirements.map(r => `req=${encodeURIComponent(r)}`).join("&");
+    router.push(`/search/preview?q=${encodeURIComponent(query)}${reqParams ? "&" + reqParams : ""}`);
   };
 
   const handleDeleteWatchlist = async (id: string) => {
@@ -98,6 +100,7 @@ function HomeContent() {
           onSearch={handleSearch}
           isLoading={false}
           initialValue={initialQuery}
+          initialRequirements={initialRequirements}
         />
 
         {/* Watchlist */}
