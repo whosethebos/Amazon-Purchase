@@ -9,6 +9,7 @@ import { useBaymax } from "@/components/BaymaxContext";
 function PreviewContent() {
   const searchParams = useSearchParams();
   const q = searchParams.get("q")?.trim() ?? "";
+  const requirements = searchParams.getAll("req");
   const router = useRouter();
   const { setPage } = useBaymax();
   useEffect(() => { setPage("preview"); }, [setPage]);
@@ -34,14 +35,15 @@ function PreviewContent() {
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNo = () => {
-    router.push(`/?q=${encodeURIComponent(q)}`);
+    const reqParams = requirements.map(r => `req=${encodeURIComponent(r)}`).join("&");
+    router.push(`/?q=${encodeURIComponent(q)}${reqParams ? "&" + reqParams : ""}`);
   };
 
   const handleConfirm = async () => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const { search_id } = await startSearch(q);
+      const { search_id } = await startSearch(q, requirements);
       router.push(`/search/${search_id}/confirm`);
     } catch {
       setIsSubmitting(false);
