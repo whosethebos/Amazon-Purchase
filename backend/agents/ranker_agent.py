@@ -28,7 +28,9 @@ class RankerAgent:
     To change scoring criteria, edit RANKING_PROMPT above.
     """
 
-    async def rank(self, products: list[dict], analyses: dict[str, dict]) -> list[dict]:
+    async def rank(
+        self, products: list[dict], analyses: dict[str, dict], requirements: list[str] | None = None
+    ) -> list[dict]:
         """
         products: list of product dicts with asin, title, price, rating, review_count
         analyses: dict mapping product asin to analysis dict (summary, pros, cons)
@@ -50,10 +52,16 @@ class RankerAgent:
                 f"   Cons: {', '.join(analysis.get('cons', []))}\n\n"
             )
 
-        result = await chat_json([{
-            "role": "user",
-            "content": RANKING_PROMPT.format(products_text=products_text)
-        }])
+        if requirements:
+            req_block = "\n".join(f"- {r}" for r in requirements)
+            content = (
+                RANKING_PROMPT.format(products_text=products_text)
+                + f"\n\nAdditional user requirements — products meeting more of these should score higher:\n{req_block}"
+            )
+        else:
+            content = RANKING_PROMPT.format(products_text=products_text)
+
+        result = await chat_json([{"role": "user", "content": content}])
 
         rank_map = {
             r["asin"]: {"score": r["score"], "rank": r["rank"]}

@@ -94,3 +94,41 @@ async def test_analyst_no_requirements_uses_base_prompt():
 
     # Base prompt uses REVIEW_ANALYSIS_PROMPT.format() — check no requirements block
     assert "user requirements" not in captured_prompt["content"]
+
+
+from agents.ranker_agent import RankerAgent
+
+
+@pytest.mark.asyncio
+async def test_ranker_appends_requirements_to_prompt():
+    agent = RankerAgent()
+    products = [{"asin": "B001", "title": "Desk", "price": 200, "rating": 4.5, "review_count": 100}]
+    analyses = {"B001": {"summary": "Good desk", "pros": ["sturdy"], "cons": []}}
+    captured_prompt = {}
+
+    async def fake_chat_json(messages):
+        captured_prompt["content"] = messages[0]["content"]
+        return {"rankings": [{"asin": "B001", "score": 80, "rank": 1}]}
+
+    with patch("agents.ranker_agent.chat_json", new=fake_chat_json):
+        await agent.rank(products, analyses, ["60 inch width"])
+
+    assert "60 inch width" in captured_prompt["content"]
+    assert "user requirements" in captured_prompt["content"]
+
+
+@pytest.mark.asyncio
+async def test_ranker_no_requirements_uses_base_prompt():
+    agent = RankerAgent()
+    products = [{"asin": "B001", "title": "Desk", "price": 200, "rating": 4.5, "review_count": 100}]
+    analyses = {"B001": {"summary": "Good desk", "pros": ["sturdy"], "cons": []}}
+    captured_prompt = {}
+
+    async def fake_chat_json(messages):
+        captured_prompt["content"] = messages[0]["content"]
+        return {"rankings": [{"asin": "B001", "score": 80, "rank": 1}]}
+
+    with patch("agents.ranker_agent.chat_json", new=fake_chat_json):
+        await agent.rank(products, analyses)
+
+    assert "user requirements" not in captured_prompt["content"]
