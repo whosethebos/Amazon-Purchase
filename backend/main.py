@@ -52,10 +52,10 @@ _sse_queues: dict[str, asyncio.Queue] = {}
 @app.post("/api/search")
 async def start_search(request: SearchRequest, background_tasks: BackgroundTasks):
     """Start a new search. Returns search_id immediately."""
-    search = db.create_search(request.query, request.max_results)
+    search = db.create_search(request.query, request.max_results, request.requirements)
     search_id = str(search["id"])
 
-    orchestrator = OrchestratorAgent(search_id, request.query)
+    orchestrator = OrchestratorAgent(search_id, request.query, request.requirements)
     _active_orchestrators[search_id] = orchestrator
 
     queue: asyncio.Queue = asyncio.Queue()

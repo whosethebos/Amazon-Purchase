@@ -132,3 +132,41 @@ async def test_ranker_no_requirements_uses_base_prompt():
         await agent.rank(products, analyses)
 
     assert "user requirements" not in captured_prompt["content"]
+
+
+from httpx import AsyncClient, ASGITransport
+from main import app
+
+
+@pytest.mark.asyncio
+async def test_search_endpoint_passes_requirements_to_orchestrator():
+    """Verify that POST /api/search forwards requirements to OrchestratorAgent."""
+    created_with = {}
+
+    def fake_create_search(query, max_results, requirements=None):
+        created_with["requirements"] = requirements
+        return {"id": "11111111-1111-1111-1111-111111111111", "query": query}
+
+    captured_orchestrator = {}
+
+    class FakeOrchestrator:
+        def __init__(self, search_id, query, requirements=None):
+            captured_orchestrator["requirements"] = requirements
+
+        async def run(self):
+            return
+            yield  # make it a generator
+
+    with (
+        patch("main.db.create_search", side_effect=fake_create_search),
+        patch("main.OrchestratorAgent", FakeOrchestrator),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.post(
+                "/api/search",
+                json={"query": "desk", "requirements": ["60 inch", "solid wood"]},
+            )
+
+    assert resp.status_code == 200
+    assert created_with["requirements"] == ["60 inch", "solid wood"]
+    assert captured_orchestrator["requirements"] == ["60 inch", "solid wood"]
