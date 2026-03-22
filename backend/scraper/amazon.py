@@ -77,6 +77,9 @@ async def search_products(query: str, max_results: int = 10) -> list[dict]:
                     price = None
                     for _sel in [
                         ".a-price .a-offscreen",
+                        ".a-price[data-a-color='base'] .a-offscreen",
+                        ".a-price[data-a-color='price'] .a-offscreen",
+                        ".a-color-price .a-offscreen",
                         ".a-price-whole",
                     ]:
                         price_el = await item.query_selector(_sel)
