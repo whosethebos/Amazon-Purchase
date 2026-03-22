@@ -10,12 +10,13 @@ def get_client() -> Client:
 
 # --- Searches ---
 
-def create_search(query: str, max_results: int) -> dict:
+def create_search(query: str, max_results: int, requirements: list[str] | None = None) -> dict:
     client = get_client()
     result = client.table("searches").insert({
         "query": query,
         "max_results": max_results,
-        "status": "pending"
+        "requirements": requirements or [],
+        "status": "pending",
     }).execute()
     return result.data[0]
 

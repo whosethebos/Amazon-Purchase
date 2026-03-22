@@ -9,6 +9,7 @@ from pydantic import BaseModel
 class SearchRequest(BaseModel):
     query: str
     max_results: int = 10
+    requirements: list[str] = []
 
 
 class ConfirmationRequest(BaseModel):
