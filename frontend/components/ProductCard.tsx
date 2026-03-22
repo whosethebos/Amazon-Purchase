@@ -28,6 +28,21 @@ type Props = {
 
 export function ProductCard({ product, onAddToWatchlist }: Props) {
   const { analysis } = product;
+  const asin = product.url.match(/\/dp\/([A-Z0-9]{10})/)?.[1];
+  const keepaMarketplace =
+    product.url.includes("amazon.in")     ? 10 :
+    product.url.includes("amazon.co.uk")  ? 2  :
+    product.url.includes("amazon.de")     ? 3  :
+    product.url.includes("amazon.fr")     ? 4  :
+    product.url.includes("amazon.ca")     ? 6  :
+    product.url.includes("amazon.it")     ? 8  :
+    product.url.includes("amazon.es")     ? 9  :
+    product.url.includes("amazon.com.au") ? 12 : 1;
+    // amazon.com.au MUST stay last — "amazon.com" is a substring of
+    // "amazon.com.au". Do NOT add an explicit amazon.com check above it.
+  const priceHistoryUrl = asin
+    ? `https://keepa.com/#!product/${keepaMarketplace}-${asin}`
+    : undefined;
 
   return (
     <div className="bg-[#141418] rounded-xl border border-[#252530] p-5 flex gap-4 hover:border-[#353548] transition-colors">
@@ -102,6 +117,16 @@ export function ProductCard({ product, onAddToWatchlist }: Props) {
           >
             <ExternalLink size={14} /> View on Amazon
           </a>
+          {priceHistoryUrl && (
+            <a
+              href={priceHistoryUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-sm text-orange-400 hover:text-orange-300 transition-colors"
+            >
+              ↗ price history
+            </a>
+          )}
           {onAddToWatchlist && (
             <button
               onClick={() => onAddToWatchlist(product.id)}
