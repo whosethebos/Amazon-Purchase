@@ -15,13 +15,13 @@ type Product = {
 
 type Props = {
   products: Product[];
-  iteration: number;
-  maxIterations: number;
+  canShowMore: boolean;
+  isLoadingMore: boolean;
   onConfirm: (selectedIds: string[]) => void;
-  onNextBatch: () => void;
+  onShowMore: () => void;
 };
 
-export function ConfirmationGrid({ products, iteration, maxIterations, onConfirm, onNextBatch }: Props) {
+export function ConfirmationGrid({ products, canShowMore, isLoadingMore, onConfirm, onShowMore }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) => {
@@ -40,7 +40,7 @@ export function ConfirmationGrid({ products, iteration, maxIterations, onConfirm
         <h2 className="text-lg font-semibold text-[#ebebf5]">
           Is this the kind of product you&apos;re looking for?
           <span className="ml-2 text-sm text-[#7878a0] font-normal font-mono">
-            {iteration} / {maxIterations}
+            {products.length} products
           </span>
         </h2>
       </div>
@@ -68,11 +68,11 @@ export function ConfirmationGrid({ products, iteration, maxIterations, onConfirm
               </div>
             )}
             <p className="text-sm font-medium text-[#ebebf5] line-clamp-2">{product.title}</p>
-            {product.price != null && (
-              <p className="text-[#f97316] font-bold text-sm mt-1">
-                {product.currency ?? "USD"} {product.price.toFixed(2)}
-              </p>
-            )}
+            <p className={`font-bold text-sm mt-1 ${product.price != null ? "text-[#f97316]" : "text-[#4a4a6a]"}`}>
+              {product.price != null
+                ? `${product.currency ?? "USD"} ${product.price.toFixed(2)}`
+                : "Price unavailable"}
+            </p>
             <div className="mt-1 flex items-center gap-2 text-xs text-[#7878a0]">
               {product.rating && <span className="text-amber-400">★ {product.rating}</span>}
               {product.review_count && <span>({product.review_count.toLocaleString()})</span>}
@@ -85,13 +85,16 @@ export function ConfirmationGrid({ products, iteration, maxIterations, onConfirm
         <button onClick={selectAll} className="text-sm text-orange-400 hover:text-orange-300 transition-colors">
           Select All
         </button>
+        {canShowMore && (
+          <button
+            onClick={onShowMore}
+            disabled={isLoadingMore}
+            className="text-sm text-orange-400 hover:text-orange-300 transition-colors disabled:opacity-40"
+          >
+            {isLoadingMore ? "Loading…" : "Show more"}
+          </button>
+        )}
         <div className="flex-1" />
-        <button
-          onClick={onNextBatch}
-          className="px-4 py-2 border border-[#252530] rounded-lg text-sm text-[#7878a0] hover:border-[#353548] hover:text-[#ebebf5] transition-all"
-        >
-          None of these →
-        </button>
         <button
           onClick={() => onConfirm([...selected])}
           disabled={selected.size === 0}
