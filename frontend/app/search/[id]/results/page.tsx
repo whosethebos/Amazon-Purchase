@@ -39,7 +39,7 @@ export default function ResultsPage() {
       <StepIndicator step={3} />
       <div className="flex items-center gap-3 flex-wrap">
         <a href="/" className="text-sm text-[#818cf8] hover:text-indigo-300">
-          ← Back
+          ← Home
         </a>
         <h1 className="text-xl font-bold text-[#ebebf5]">
           Results: &quot;{search?.query}&quot;
