@@ -55,3 +55,42 @@ def test_orchestrator_requirements_defaults_to_empty():
 def test_orchestrator_requirements_none_becomes_empty():
     orch = OrchestratorAgent("sid1", "desk", None)
     assert orch.requirements == []
+
+
+import pytest
+from unittest.mock import AsyncMock, patch
+from agents.analyst_agent import ReviewAnalystAgent
+
+
+@pytest.mark.asyncio
+async def test_analyst_uses_requirements_in_prompt():
+    agent = ReviewAnalystAgent()
+    reviews = [{"rating": 5, "title": "Great", "body": "Love it"}]
+    captured_prompt = {}
+
+    async def fake_chat_json(messages):
+        captured_prompt["content"] = messages[0]["content"]
+        return {"summary": "ok", "pros": [], "cons": [], "sentiment": "positive"}
+
+    with patch("agents.analyst_agent.chat_json", new=fake_chat_json):
+        await agent.analyze("Standing Desk", reviews, ["60 inch width", "solid wood"])
+
+    assert "60 inch width" in captured_prompt["content"]
+    assert "solid wood" in captured_prompt["content"]
+
+
+@pytest.mark.asyncio
+async def test_analyst_no_requirements_uses_base_prompt():
+    agent = ReviewAnalystAgent()
+    reviews = [{"rating": 5, "title": "Great", "body": "Love it"}]
+    captured_prompt = {}
+
+    async def fake_chat_json(messages):
+        captured_prompt["content"] = messages[0]["content"]
+        return {"summary": "ok", "pros": [], "cons": [], "sentiment": "positive"}
+
+    with patch("agents.analyst_agent.chat_json", new=fake_chat_json):
+        await agent.analyze("Standing Desk", reviews)
+
+    # Base prompt uses REVIEW_ANALYSIS_PROMPT.format() — check no requirements block
+    assert "user requirements" not in captured_prompt["content"]
