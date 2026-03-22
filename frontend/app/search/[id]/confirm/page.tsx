@@ -99,6 +99,7 @@ export default function ConfirmPage() {
   const [maxIterations, setMaxIterations] = useState(3);
   const [needsMoreDetail, setNeedsMoreDetail] = useState(false);
   const [isWaiting, setIsWaiting] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const processedEvents = useRef(new Set<number>());
 
   useEffect(() => {
@@ -109,11 +110,12 @@ export default function ConfirmPage() {
       // Keep Baymax speech bubble in sync with latest status
       if (event.event === "batch_ready") {
         const d = event.data as any;
-        setCurrentBatch(d.batch ?? []);
+        setCurrentBatch(prev => [...prev, ...(d.batch ?? [])]);
         setIteration(d.iteration ?? 0);
         setMaxIterations(d.max_iterations ?? 3);
         setNeedsMoreDetail(d.needs_more_detail ?? false);
         setIsWaiting(false);
+        setIsLoadingMore(false);
       }
 
       if (event.event === "complete") {
@@ -127,8 +129,8 @@ export default function ConfirmPage() {
     await confirmProducts(searchId, selectedIds);
   };
 
-  const handleNextBatch = async () => {
-    setIsWaiting(true);
+  const handleShowMore = async () => {
+    setIsLoadingMore(true);
     await confirmProducts(searchId, []);
   };
 
@@ -162,10 +164,10 @@ export default function ConfirmPage() {
       ) : currentBatch.length > 0 ? (
         <ConfirmationGrid
           products={currentBatch}
-          iteration={iteration}
-          maxIterations={maxIterations}
+          canShowMore={iteration < maxIterations && !isLoadingMore}
+          isLoadingMore={isLoadingMore}
           onConfirm={handleConfirm}
-          onNextBatch={handleNextBatch}
+          onShowMore={handleShowMore}
         />
       ) : (
         <div className="text-center py-16 text-[#4a4a6a]">Searching Amazon...</div>
