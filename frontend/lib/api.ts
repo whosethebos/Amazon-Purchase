@@ -2,11 +2,15 @@
 import { API_URL } from "./config";
 import type { AnalyzeUrlResponse, SimilarProduct } from "./types";
 
-export async function startSearch(query: string, maxResults = 10): Promise<{ search_id: string }> {
+export async function startSearch(
+  query: string,
+  requirements: string[] = [],
+  maxResults = 10
+): Promise<{ search_id: string }> {
   const res = await fetch(`${API_URL}/api/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, max_results: maxResults }),
+    body: JSON.stringify({ query, requirements, max_results: maxResults }),
   });
   if (!res.ok) throw new Error("Failed to start search");
   return res.json();
