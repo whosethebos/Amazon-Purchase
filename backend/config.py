@@ -7,9 +7,8 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:14b"
     ollama_base_url: str = "http://localhost:11434"
 
-    # Supabase
-    supabase_url: str = ""
-    supabase_key: str = ""
+    # Database
+    database_url: str = "postgresql://localhost/amazon_purchase"
 
     # Scraping
     amazon_domain: str = "amazon.in"
