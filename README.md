@@ -49,7 +49,8 @@ Amazon-Purchase/
 │   ├── llm/
 │   │   └── analyze.py        # Ollama LLM call for review analysis
 │   └── db/
-│       └── supabase_client.py # Supabase persistence (searches, products, watchlist, price history)
+│       ├── pool.py            # AsyncConnectionPool singleton (opened at startup)
+│       └── postgres_client.py # PostgreSQL persistence (searches, products, watchlist, price history)
 │
 └── frontend/                 # Next.js 15 + Tailwind CSS
     ├── app/
@@ -91,7 +92,7 @@ User types query
 | Backend | FastAPI, Python 3.13, asyncio |
 | Scraping | Playwright (headless Chromium) |
 | AI / LLM | Ollama (local) — default model: `qwen3:14b` |
-| Database | Supabase (PostgreSQL) |
+| Database | PostgreSQL (local, via psycopg3) |
 | Streaming | Server-Sent Events (SSE) |
 
 ---
@@ -102,7 +103,7 @@ User types query
 - **Python** 3.13+
 - **Playwright** — Chromium browser (installed automatically)
 - **Ollama** running locally with a supported model
-- **Supabase** project (free tier works)
+- **PostgreSQL** running locally (`createdb amazon_purchase`)
 
 ---
 
@@ -125,7 +126,11 @@ pip install -r requirements.txt
 playwright install chromium
 
 cp .env.example .env
-# Edit .env — set SUPABASE_URL, SUPABASE_KEY, OLLAMA_MODEL
+# Edit .env — set DATABASE_URL for your local Postgres, and OLLAMA_MODEL
+
+# Create the database and apply schema
+createdb amazon_purchase
+psql amazon_purchase < db/schema.sql
 ```
 
 Start the backend:
@@ -154,8 +159,7 @@ All settings live in `backend/config.py` and can be overridden via environment v
 |---|---|---|
 | `OLLAMA_MODEL` | `qwen3:14b` | Local LLM model name |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `SUPABASE_URL` | — | Your Supabase project URL |
-| `SUPABASE_KEY` | — | Your Supabase anon/service key |
+| `DATABASE_URL` | `postgresql://localhost/amazon_purchase` | Local PostgreSQL connection string |
 | `AMAZON_DOMAIN` | `amazon.in` | Amazon domain to search (`amazon.com`, `amazon.co.uk`, …) |
 | `AMAZON_BATCH_SIZE` | `5` | Products shown per confirmation round |
 | `MAX_REVIEWS_PER_PRODUCT` | `20` | Reviews scraped per product |
