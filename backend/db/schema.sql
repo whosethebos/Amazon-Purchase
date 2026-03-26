@@ -1,10 +1,12 @@
 -- backend/db/schema.sql
--- Run this in your Supabase project's SQL editor
+-- Run this against your local PostgreSQL database to create the schema:
+--   psql amazon_purchase < backend/db/schema.sql
 
 CREATE TABLE searches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     query TEXT NOT NULL,
     max_results INT DEFAULT 10,
+    requirements JSONB DEFAULT '[]',
     status TEXT DEFAULT 'pending',  -- pending | scraping | confirming | analyzing | ranking | done | failed
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
