@@ -2,16 +2,19 @@
 import asyncio
 import httpx
 import json
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from models import SearchRequest, ConfirmationRequest, AnalyzeUrlRequest
 from agents.orchestrator import OrchestratorAgent
-import db.supabase_client as db
-from db.supabase_client import find_or_create_product_by_asin
+import db.postgres_client as db
+from db.postgres_client import find_or_create_product_by_asin
+from db.pool import open_pool, close_pool
 from scraper.amazon import scrape_current_price, scrape_product_details, scrape_preview_images, extract_asin, search_products
 from config import settings
 from llm.analyze import run_llm_analysis
+
 
 def _validate_score(raw) -> int | None:
     """Coerce LLM-returned score to int 1–10, or None if invalid."""
@@ -31,7 +34,14 @@ def _validate_score(raw) -> int | None:
     return None
 
 
-app = FastAPI(title="Amazon Research Tool")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await open_pool()
+    yield
+    await close_pool()
+
+
+app = FastAPI(title="Amazon Research Tool", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,7 +62,7 @@ _sse_queues: dict[str, asyncio.Queue] = {}
 @app.post("/api/search")
 async def start_search(request: SearchRequest, background_tasks: BackgroundTasks):
     """Start a new search. Returns search_id immediately."""
-    search = db.create_search(request.query, request.max_results, request.requirements)
+    search = await db.create_search(request.query, request.max_results, request.requirements)
     search_id = str(search["id"])
 
     orchestrator = OrchestratorAgent(search_id, request.query, request.requirements)
@@ -110,14 +120,14 @@ async def confirm_products(search_id: str, request: ConfirmationRequest):
 @app.get("/api/search/{search_id}/results")
 async def get_results(search_id: str):
     """Fetch final ranked results for a completed search."""
-    search = db.get_search(search_id)
+    search = await db.get_search(search_id)
     if not search:
         raise HTTPException(404, "Search not found")
 
-    products = db.get_confirmed_products(search_id)
+    products = await db.get_confirmed_products(search_id)
     result = []
     for product in products:
-        analysis = db.get_analysis_by_product(product["id"])
+        analysis = await db.get_analysis_by_product(product["id"])
         result.append({**product, "analysis": analysis})
 
     result.sort(key=lambda x: (x.get("analysis") or {}).get("rank") or 99)
@@ -148,10 +158,10 @@ async def get_similar_products(asin: str, title: str):
 @app.get("/api/searches")
 async def list_searches():
     """List all past searches for the home page history panel."""
-    searches = db.list_searches()
+    searches = await db.list_searches()
     result = []
     for s in searches:
-        products = db.get_confirmed_products(str(s["id"]))
+        products = await db.get_confirmed_products(str(s["id"]))
         result.append({**s, "product_count": len(products)})
     return result
 
@@ -159,7 +169,7 @@ async def list_searches():
 @app.delete("/api/searches/{search_id}")
 async def delete_search(search_id: str):
     """Delete a search and all its associated data (cascade)."""
-    db.delete_search(search_id)
+    await db.delete_search(search_id)
     return {"ok": True}
 
 
@@ -168,11 +178,11 @@ async def delete_search(search_id: str):
 @app.get("/api/watchlist")
 async def get_watchlist():
     """Get all watchlist items with current and previous price."""
-    items = db.get_watchlist()
+    items = await db.get_watchlist()
     result = []
     for item in items:
         product = item.get("products", {})
-        price_history = db.get_price_history(str(product["id"])) if product else []
+        price_history = await db.get_price_history(str(product["id"])) if product else []
         current_price = price_history[0]["price"] if price_history else product.get("price")
         previous_price = price_history[1]["price"] if len(price_history) > 1 else None
         result.append({
@@ -192,7 +202,7 @@ async def add_to_watchlist(body: dict):
     product_id = body.get("product_id")
     if not product_id:
         raise HTTPException(400, "product_id required")
-    item = db.add_to_watchlist(str(product_id))
+    item = await db.add_to_watchlist(str(product_id))
     return item
 
 
@@ -202,7 +212,7 @@ async def add_to_watchlist_from_url(body: dict):
     asin = body.get("asin")
     if not asin:
         raise HTTPException(400, "asin required")
-    product_record = find_or_create_product_by_asin({
+    product_record = await find_or_create_product_by_asin({
         "asin": asin,
         "title": body.get("title"),
         "price": body.get("price"),
@@ -212,21 +222,21 @@ async def add_to_watchlist_from_url(body: dict):
         "image_url": body.get("image_url"),
         "url": body.get("url"),
     })
-    item = db.add_to_watchlist(str(product_record["id"]))
+    item = await db.add_to_watchlist(str(product_record["id"]))
     return item
 
 
 @app.delete("/api/watchlist/{watchlist_id}")
 async def remove_from_watchlist(watchlist_id: str):
     """Remove a product from the watchlist."""
-    db.delete_watchlist_item(watchlist_id)
+    await db.delete_watchlist_item(watchlist_id)
     return {"ok": True}
 
 
 @app.post("/api/watchlist/{watchlist_id}/refresh")
 async def refresh_watchlist_item(watchlist_id: str):
     """On-demand price refresh — re-scrapes the product page for current price."""
-    items = db.get_watchlist()
+    items = await db.get_watchlist()
     item = next((i for i in items if str(i["id"]) == watchlist_id), None)
     if not item:
         raise HTTPException(404, "Watchlist item not found")
@@ -234,8 +244,8 @@ async def refresh_watchlist_item(watchlist_id: str):
     product = item.get("products", {})
     price_data = await scrape_current_price(product["url"])
     if price_data:
-        db.insert_price_history(str(product["id"]), price_data["price"], price_data["currency"])
-        db.update_watchlist_checked(watchlist_id)
+        await db.insert_price_history(str(product["id"]), price_data["price"], price_data["currency"])
+        await db.update_watchlist_checked(watchlist_id)
 
     return {"price": price_data}
 
