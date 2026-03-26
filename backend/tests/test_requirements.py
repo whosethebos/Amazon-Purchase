@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from models import SearchRequest
-from db.supabase_client import create_search
+from db.postgres_client import create_search
 
 
 def test_search_request_accepts_requirements():
@@ -16,27 +16,47 @@ def test_search_request_requirements_defaults_to_empty():
     assert req.requirements == []
 
 
-def test_create_search_passes_requirements_to_db():
-    mock_client = MagicMock()
-    mock_client.table.return_value.insert.return_value.execute.return_value.data = [
-        {"id": "abc123", "query": "desk", "max_results": 10, "requirements": ["60 inch"]}
-    ]
-    with patch("db.supabase_client.get_client", return_value=mock_client):
-        result = create_search("desk", 10, ["60 inch"])
-    insert_call = mock_client.table.return_value.insert.call_args[0][0]
-    assert insert_call["requirements"] == ["60 inch"]
+def _make_mock_pool(fetchone_return: dict):
+    """Build a mock pool that simulates async with pool.connection() as conn."""
+    mock_cursor = AsyncMock()
+    mock_cursor.fetchone = AsyncMock(return_value=fetchone_return)
+
+    mock_conn = AsyncMock()
+    mock_conn.execute = AsyncMock(return_value=mock_cursor)
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_conn)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    mock_pool = MagicMock()
+    mock_pool.connection = MagicMock(return_value=mock_cm)
+    return mock_pool, mock_conn
+
+
+@pytest.mark.asyncio
+async def test_create_search_passes_requirements_to_db():
+    expected_row = {"id": "abc123", "query": "desk", "max_results": 10, "requirements": ["60 inch"]}
+    mock_pool, mock_conn = _make_mock_pool(expected_row)
+
+    with patch("db.postgres_client.get_pool", return_value=mock_pool):
+        result = await create_search("desk", 10, ["60 inch"])
+
+    sql, params = mock_conn.execute.call_args[0]
+    assert "INSERT INTO searches" in sql
     assert result["id"] == "abc123"
 
 
-def test_create_search_requirements_defaults_to_empty():
-    mock_client = MagicMock()
-    mock_client.table.return_value.insert.return_value.execute.return_value.data = [
-        {"id": "abc123", "query": "desk", "max_results": 10, "requirements": []}
-    ]
-    with patch("db.supabase_client.get_client", return_value=mock_client):
-        result = create_search("desk", 10)
-    insert_call = mock_client.table.return_value.insert.call_args[0][0]
-    assert insert_call["requirements"] == []
+@pytest.mark.asyncio
+async def test_create_search_requirements_defaults_to_empty():
+    expected_row = {"id": "abc123", "query": "desk", "max_results": 10, "requirements": []}
+    mock_pool, mock_conn = _make_mock_pool(expected_row)
+
+    with patch("db.postgres_client.get_pool", return_value=mock_pool):
+        result = await create_search("desk", 10)
+
+    sql, params = mock_conn.execute.call_args[0]
+    assert "INSERT INTO searches" in sql
+    assert result["requirements"] == []
 
 
 from agents.orchestrator import OrchestratorAgent
@@ -55,6 +75,7 @@ def test_orchestrator_requirements_defaults_to_empty():
 def test_orchestrator_requirements_none_becomes_empty():
     orch = OrchestratorAgent("sid1", "desk", None)
     assert orch.requirements == []
+
 
 from agents.analyst_agent import ReviewAnalystAgent
 
@@ -89,7 +110,6 @@ async def test_analyst_no_requirements_uses_base_prompt():
     with patch("agents.analyst_agent.chat_json", new=fake_chat_json):
         await agent.analyze("Standing Desk", reviews)
 
-    # Base prompt uses REVIEW_ANALYSIS_PROMPT.format() — check no requirements block
     assert "user requirements" not in captured_prompt["content"]
 
 
@@ -140,7 +160,7 @@ async def test_search_endpoint_passes_requirements_to_orchestrator():
     """Verify that POST /api/search forwards requirements to OrchestratorAgent."""
     created_with = {}
 
-    def fake_create_search(query, max_results, requirements=None):
+    async def fake_create_search(query, max_results, requirements=None):
         created_with["requirements"] = requirements
         return {"id": "11111111-1111-1111-1111-111111111111", "query": query}
 
