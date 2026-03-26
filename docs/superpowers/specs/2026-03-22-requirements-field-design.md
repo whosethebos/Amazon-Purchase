@@ -134,7 +134,7 @@ search_id = str(search["id"])
 orchestrator = OrchestratorAgent(search_id, request.query, request.requirements)
 ```
 
-### `db/supabase_client.py` — `create_search`
+### `db/postgres_client.py` — `create_search`
 
 Updated signature and body:
 ```python
@@ -158,7 +158,7 @@ ALTER TABLE searches
   ADD COLUMN IF NOT EXISTS requirements JSONB NOT NULL DEFAULT '[]'::jsonb;
 ```
 
-Apply in Supabase SQL editor before deploying. Existing rows get `[]` automatically via the default.
+Apply against your local PostgreSQL database. Existing rows get `[]` automatically via the default. Existing rows get `[]` automatically via the default.
 
 ### `agents/orchestrator.py` — `OrchestratorAgent`
 

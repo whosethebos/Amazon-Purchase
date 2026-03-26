@@ -24,8 +24,9 @@ Amazon-Purchase/
 │   ├── tests/
 │   │   └── test_analyze_url.py  # Unit tests for pure logic
 │   └── db/
-│       ├── schema.sql           # Run this in Supabase SQL editor
-│       └── supabase_client.py   # All DB read/write helpers
+│       ├── schema.sql           # Run against local PostgreSQL: psql amazon_purchase < backend/db/schema.sql
+│       ├── pool.py              # AsyncConnectionPool singleton
+│       └── postgres_client.py   # All DB read/write helpers
 └── frontend/
     ├── app/page.tsx             # Home: search + watchlist + history
     ├── app/search/preview/      # Step 1: preview images before searching Amazon
@@ -124,7 +125,7 @@ Edit `asyncio.timeout(180)` in `POST /api/analyze-url` in `backend/main.py`.
 
 **Add a new scraped field (e.g. product category):**
 1. Add selector in `backend/scraper/amazon.py` → `search_products()`
-2. Add column to `backend/db/schema.sql` + run migration in Supabase
+2. Add column to `backend/db/schema.sql` + run migration: `psql amazon_purchase -c 'ALTER TABLE ...'`
 3. Add field to `ProductBase` in `backend/models.py`
 4. Display in `frontend/components/ProductCard.tsx`
 

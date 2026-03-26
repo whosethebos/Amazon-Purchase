@@ -20,7 +20,7 @@ A full-stack Amazon product research tool that uses AI agents to search, scrape,
 | Agents | Google ADK (multi-agent orchestration) |
 | LLM | Ollama — `qwen3:14b` (local, model-agnostic via config) |
 | Scraping | Playwright (Python) |
-| Database | Supabase (PostgreSQL) |
+| Database | PostgreSQL (local, via psycopg3) |
 | Realtime | Server-Sent Events (SSE) |
 
 ---
@@ -41,7 +41,7 @@ A full-stack Amazon product research tool that uses AI agents to search, scrape,
     └── RankerAgent          (qwen3:14b → 0-100 score)
               │
               ▼
-       [Supabase DB]
+       [PostgreSQL DB]
 ```
 
 ---
@@ -113,7 +113,7 @@ Amazon-Purchase/
 │   ├── llm/
 │   │   └── ollama_client.py        # Ollama HTTP client (model set via config)
 │   ├── db/
-│   │   └── supabase_client.py      # Supabase CRUD helpers
+│   │   └── postgres_client.py      # PostgreSQL CRUD helpers
 │   ├── models.py                   # Pydantic schemas
 │   └── config.py                   # OLLAMA_MODEL, DB_URL, etc.
 │
@@ -123,7 +123,7 @@ Amazon-Purchase/
 
 ---
 
-## Database Schema (Supabase)
+## Database Schema (PostgreSQL)
 
 ```sql
 -- One row per user search session
@@ -242,8 +242,7 @@ CREATE TABLE price_history (
 ```python
 OLLAMA_MODEL = "qwen3:14b"       # Swap model here
 OLLAMA_BASE_URL = "http://localhost:11434"
-SUPABASE_URL = "..."
-SUPABASE_KEY = "..."
+DATABASE_URL = "postgresql://localhost/amazon_purchase"
 AMAZON_BATCH_SIZE = 5            # Products per confirmation batch
 MAX_CONFIRMATION_ITERATIONS = 3  # Before asking for more detail
 MAX_REVIEWS_PER_PRODUCT = 20     # Reviews to scrape per product
@@ -263,7 +262,7 @@ MAX_REVIEWS_PER_PRODUCT = 20     # Reviews to scrape per product
 
 ## Skill
 
-A custom `amazon-scraper` skill will be created to capture patterns for this project (scraping logic, agent prompts, Supabase schema helpers) for reuse and reference during development.
+A custom `amazon-scraper` skill will be created to capture patterns for this project (scraping logic, agent prompts, PostgreSQL schema helpers) for reuse and reference during development.
 
 ---
 

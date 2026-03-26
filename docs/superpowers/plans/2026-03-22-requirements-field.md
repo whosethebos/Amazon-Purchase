@@ -6,7 +6,7 @@
 
 **Architecture:** Requirements are captured as `string[]` in the SearchBar UI, serialised as repeated `req=` URL params, sent as `requirements: string[]` in the POST body, stored in the `searches` table, passed through the OrchestratorAgent to both the analyst and ranker prompts.
 
-**Tech Stack:** Next.js 14 (React), FastAPI, Pydantic v2, Supabase (PostgreSQL), Ollama LLM
+**Tech Stack:** Next.js 14 (React), FastAPI, Pydantic v2, PostgreSQL (local, psycopg3), Ollama LLM
 
 ---
 
@@ -20,7 +20,7 @@
 | `frontend/lib/api.ts` | Update `startSearch` signature to include requirements |
 | `backend/models.py` | Add `requirements: list[str] = []` to `SearchRequest` |
 | `backend/main.py` | Pass requirements to `create_search` and `OrchestratorAgent` |
-| `backend/db/supabase_client.py` | Update `create_search` signature |
+| `backend/db/postgres_client.py` | Update `create_search` signature |
 | `backend/agents/orchestrator.py` | Accept + use requirements in constructor and pipeline phases |
 | `backend/agents/analyst_agent.py` | Accept requirements, build dynamic prompt when non-empty |
 | `backend/agents/ranker_agent.py` | Accept requirements, append requirements block to prompt |
@@ -31,11 +31,11 @@
 ## Task 1: Database Migration
 
 **Files:**
-- Apply SQL in Supabase SQL editor
+- Apply SQL in local PostgreSQL database
 
 - [ ] **Step 1: Apply the migration**
 
-Open Supabase SQL editor and run:
+Open local PostgreSQL database and run:
 ```sql
 ALTER TABLE searches
   ADD COLUMN IF NOT EXISTS requirements JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -43,7 +43,7 @@ ALTER TABLE searches
 
 - [ ] **Step 2: Verify**
 
-In Supabase Table Editor, open `searches` table → confirm `requirements` column exists with default `[]`.
+Run `psql amazon_purchase -c "\\d searches"` and confirm the `requirements` column exists with default `'[]'`.
 
 - [ ] **Step 3: Commit note**
 
@@ -55,7 +55,7 @@ This step is manual (no file change), so no git commit needed here. Move to Task
 
 **Files:**
 - Modify: `backend/models.py`
-- Modify: `backend/db/supabase_client.py`
+- Modify: `backend/db/postgres_client.py`
 - Create: `backend/tests/test_requirements.py`
 
 - [ ] **Step 1: Write failing tests for create_search signature**
@@ -68,7 +68,7 @@ Create `backend/tests/test_requirements.py`:
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from models import SearchRequest
-from db.supabase_client import create_search
+from db.postgres_client import create_search
 
 
 def test_search_request_accepts_requirements():
@@ -86,7 +86,7 @@ def test_create_search_passes_requirements_to_db():
     mock_client.table.return_value.insert.return_value.execute.return_value.data = [
         {"id": "abc123", "query": "desk", "max_results": 10, "requirements": ["60 inch"]}
     ]
-    with patch("db.supabase_client.get_client", return_value=mock_client):
+    with patch("db.postgres_client.get_client", return_value=mock_client):
         result = create_search("desk", 10, ["60 inch"])
     insert_call = mock_client.table.return_value.insert.call_args[0][0]
     assert insert_call["requirements"] == ["60 inch"]
@@ -98,7 +98,7 @@ def test_create_search_requirements_defaults_to_empty():
     mock_client.table.return_value.insert.return_value.execute.return_value.data = [
         {"id": "abc123", "query": "desk", "max_results": 10, "requirements": []}
     ]
-    with patch("db.supabase_client.get_client", return_value=mock_client):
+    with patch("db.postgres_client.get_client", return_value=mock_client):
         result = create_search("desk", 10)
     insert_call = mock_client.table.return_value.insert.call_args[0][0]
     assert insert_call["requirements"] == []
@@ -129,9 +129,9 @@ class SearchRequest(BaseModel):
     requirements: list[str] = []
 ```
 
-- [ ] **Step 4: Update `db/supabase_client.py` — create_search signature**
+- [ ] **Step 4: Update `db/postgres_client.py` — create_search signature**
 
-In `backend/db/supabase_client.py`, change:
+In `backend/db/postgres_client.py`, change:
 ```python
 def create_search(query: str, max_results: int) -> dict:
     client = get_client()
@@ -176,7 +176,7 @@ Expected: All tests pass.
 
 ```bash
 cd /Users/whosethebos/Documents/GitHub/Amazon-Purchase
-git add backend/models.py backend/db/supabase_client.py backend/tests/test_requirements.py
+git add backend/models.py backend/db/postgres_client.py backend/tests/test_requirements.py
 git commit -m "feat: add requirements field to SearchRequest model and create_search db function"
 ```
 
@@ -961,7 +961,7 @@ npm run dev
 3. Click Search → preview page URL should include `&req=60+inch+width&req=under+%24300`
 4. Click "← Back" → home page search box should re-populate both the query and tags
 5. Click Search → Confirm → verify search starts
-6. Check Supabase `searches` table — `requirements` column should contain `["60 inch width", "under $300"]`
+6. Check `searches` table in psql — `requirements` column should contain `["60 inch width", "under $300"]`
 7. After analysis completes, verify results include products ranked with requirements context
 
 - [ ] **Step 4: Final commit if any fixes needed**

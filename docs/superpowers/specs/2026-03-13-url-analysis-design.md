@@ -481,6 +481,6 @@ All new UI follows the existing Refined Dark palette:
 ## Out of Scope
 
 - No SSE/streaming for URL analysis.
-- No saving URL analysis results to Supabase watchlist.
+- No saving URL analysis results to the watchlist database.
 - Only `amazon.com` URLs are supported. Other Amazon domains fall through to the normal search flow.
 - Non-product Amazon URLs (category pages, search results pages) are not supported.

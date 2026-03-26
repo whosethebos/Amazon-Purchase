@@ -486,7 +486,7 @@ git commit -m "feat: add scrape_product_details for full product + review page s
 - Create: `backend/llm/analyze.py`
 - Modify: `backend/tests/test_analyze_url.py`
 
-**Why a separate file?** Keeping `run_llm_analysis` out of `main.py` lets us import it in unit tests without pulling in FastAPI + Supabase, which require environment variables and network access. The existing `backend/llm/` directory already contains `ollama_client.py`.
+**Why a separate file?** Keeping `run_llm_analysis` out of `main.py` lets us import it in unit tests without pulling in FastAPI + the database pool, which require environment variables and a running database. The existing `backend/llm/` directory already contains `ollama_client.py`.
 
 - [ ] **Step 1: Write a failing test for the LLM fallback behavior**
 

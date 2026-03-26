@@ -4,9 +4,9 @@
 
 **Goal:** Build a full-stack Amazon product research tool with AI agents that scrape, analyze, and rank products, with a Next.js UI for search, product confirmation, results, and watchlist.
 
-**Architecture:** FastAPI backend orchestrates Google ADK agents (Scraper → ConfirmationAgent → ReviewAnalyst → Ranker). Playwright handles Amazon scraping. Ollama (qwen3:14b) powers all LLM work. Results stream to Next.js via SSE. Everything persists in Supabase.
+**Architecture:** FastAPI backend orchestrates Google ADK agents (Scraper → ConfirmationAgent → ReviewAnalyst → Ranker). Playwright handles Amazon scraping. Ollama (qwen3:14b) powers all LLM work. Results stream to Next.js via SSE. Everything persists in PostgreSQL (local).
 
-**Tech Stack:** Python 3.11, FastAPI, Google ADK, Playwright, Ollama (qwen3:14b), Supabase, Next.js 14 (App Router), TypeScript, Tailwind CSS
+**Tech Stack:** Python 3.11, FastAPI, Google ADK, Playwright, Ollama (qwen3:14b), PostgreSQL (psycopg3), Next.js 14 (App Router), TypeScript, Tailwind CSS
 
 **Design doc:** [docs/plans/2026-03-10-amazon-research-tool-design.md](2026-03-10-amazon-research-tool-design.md)
 
@@ -27,7 +27,8 @@ uvicorn[standard]==0.30.0
 playwright==1.47.0
 google-adk==1.0.0
 httpx==0.27.0
-supabase==2.7.0
+psycopg[binary]>=3.1
+psycopg-pool>=3.2
 pydantic==2.8.0
 pydantic-settings==2.4.0
 python-dotenv==1.0.1
@@ -47,9 +48,8 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen3:14b"
     ollama_base_url: str = "http://localhost:11434"
 
-    # Supabase
-    supabase_url: str
-    supabase_key: str
+    # Database
+    database_url: str = "postgresql://localhost/amazon_purchase"
 
     # Scraping
     amazon_batch_size: int = 5
@@ -69,8 +69,7 @@ settings = Settings()
 **Step 3: Create .env.example**
 
 ```
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-anon-key
+DATABASE_URL=postgresql://user:password@localhost:5432/amazon_purchase
 OLLAMA_MODEL=qwen3:14b
 OLLAMA_BASE_URL=http://localhost:11434
 AMAZON_BATCH_SIZE=5
@@ -195,15 +194,15 @@ git commit -m "feat: add pydantic models"
 
 ---
 
-## Task 3: Supabase Schema Setup
+## Task 3: PostgreSQL Schema Setup
 
 **Files:**
 - Create: `backend/db/schema.sql`
-- Create: `backend/db/supabase_client.py`
+- Create: `backend/db/postgres_client.py`
 
 **Step 1: Create SQL schema**
 
-Run this in your Supabase project's SQL editor:
+Run this against your local PostgreSQL database:
 
 ```sql
 -- backend/db/schema.sql
@@ -272,17 +271,17 @@ CREATE TABLE price_history (
 );
 ```
 
-**Step 2: Create Supabase client helpers**
+**Step 2: Create PostgreSQL client helpers**
 
 ```python
-# backend/db/supabase_client.py
+# backend/db/postgres_client.py
 from uuid import UUID
-from supabase import create_client, Client
+from db.pool import get_pool
 from config import settings
 
 
 def get_client() -> Client:
-    return create_client(settings.supabase_url, settings.supabase_key)
+    return get_pool()
 
 
 # --- Searches ---
@@ -449,7 +448,7 @@ def get_price_history(product_id: str) -> list[dict]:
 
 ```bash
 git add backend/db/
-git commit -m "feat: add supabase schema and client helpers"
+git commit -m "feat: add postgres schema and client helpers"
 ```
 
 ---
@@ -989,7 +988,7 @@ from agents.scraper_agent import ScraperAgent
 from agents.confirmation_agent import ConfirmationAgent
 from agents.analyst_agent import ReviewAnalystAgent
 from agents.ranker_agent import RankerAgent
-import db.supabase_client as db
+import db.postgres_client as db
 from config import settings
 
 
@@ -1153,7 +1152,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from models import SearchRequest, ConfirmationRequest
 from agents.orchestrator import OrchestratorAgent
-import db.supabase_client as db
+import db.postgres_client as db
 from scraper.amazon import scrape_current_price
 from config import settings
 
@@ -2260,7 +2259,7 @@ All agents share the same model via `config.settings.ollama_model`.
 ## Adding a New Scraper Field
 
 1. Edit `backend/scraper/amazon.py` — add selector in `search_products()`
-2. Add the field to the `products` table in Supabase (`db/schema.sql`)
+2. Add the field to the `products` table in `db/schema.sql`
 3. Update `backend/models.py` — add to `ProductBase`
 4. Update `frontend/components/ProductCard.tsx` to display it
 
@@ -2311,8 +2310,8 @@ git commit -m "feat: add amazon-scraper skill documentation"
 Run through this checklist manually after completing all tasks:
 
 1. Start Ollama: `ollama serve` — verify `qwen3:14b` is available
-2. Copy `.env.example` to `.env` and fill in Supabase credentials
-3. Run schema SQL in Supabase SQL editor
+2. Copy `.env.example` to `.env` and set DATABASE_URL for your local Postgres
+3. Run schema SQL: `psql amazon_purchase < backend/db/schema.sql`
 4. Start backend: `cd backend && uv run uvicorn main:app --reload`
 5. Start frontend: `cd frontend && npm run dev`
 6. Open `http://localhost:3000`
@@ -2336,5 +2335,5 @@ Run through this checklist manually after completing all tasks:
 - **Change ranking criteria:** Edit `RANKING_PROMPT` in `backend/agents/ranker_agent.py`
 - **Add new search filters:** Add fields to `SearchRequest` in `models.py` and pass to `OrchestratorAgent`
 - **Change LLM model:** Update `OLLAMA_MODEL` in `.env`
-- **Add more product fields:** Update `amazon.py` scraper selectors + Supabase schema + `ProductBase` model
+- **Add more product fields:** Update `amazon.py` scraper selectors + `db/schema.sql` + `ProductBase` model
 - **Change batch size:** Update `AMAZON_BATCH_SIZE` in `.env`
